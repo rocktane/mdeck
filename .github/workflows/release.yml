@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag to build or retry'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -11,13 +17,16 @@ permissions:
 jobs:
   release:
     name: Build & Release
-    runs-on: macos-14
+    runs-on: macos-26
     outputs:
       version: ${{ steps.meta.outputs.version }}
       sha256: ${{ steps.meta.outputs.sha256 }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Show Swift version
         run: swift --version
@@ -45,7 +54,7 @@ jobs:
 
       - name: Check version matches tag
         env:
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Resources/Info.plist)
           test "$RELEASE_TAG" = "v$VERSION"
@@ -56,12 +65,12 @@ jobs:
       - name: Package & compute SHA256
         id: meta
         env:
-          REF: ${{ github.ref }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           cd build
           ditto -c -k --sequesterRsrc --keepParent mdeck.app mdeck.zip
           SHA=$(shasum -a 256 mdeck.zip | awk '{print $1}')
-          VERSION="${REF#refs/tags/v}"
+          VERSION="${RELEASE_TAG#v}"
           echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
@@ -71,6 +80,7 @@ jobs:
           VERSION: ${{ steps.meta.outputs.version }}
           OWNER: ${{ github.repository_owner }}
         with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
           name: mdeck v${{ steps.meta.outputs.version }}
           body: |
             ## Installation
