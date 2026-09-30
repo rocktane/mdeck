@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Altty vs macOS 27 switcher</title>
+<style>
+  :root { --bg: #f5f5f7; --card: #fff; --text: #1d1d1f; --muted: #6e6e73; --line: #d2d2d7; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161617; --card: #1f1f21; --text: #f5f5f7; --muted: #a1a1a6; --line: #38383a; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; }
+  main { max-width: 1500px; margin: 0 auto; padding: 40px 24px 64px; }
+  h1 { font-size: 28px; margin: 0 0 6px; }
+  h2 { font-size: 19px; margin: 44px 0 4px; }
+  p.lead, p.note { color: var(--muted); margin: 0 0 16px; max-width: 900px; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 900px) { .pair { grid-template-columns: 1fr; } }
+  figure { margin: 0; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px; }
+  figure img { width: 100%; height: auto; display: block; border-radius: 8px; }
+  figcaption { font-size: 13px; color: var(--muted); margin-top: 8px; }
+  figcaption b { color: var(--text); }
+  table { border-collapse: collapse; background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+          overflow: hidden; width: 100%; max-width: 1000px; font-size: 14px; }
+  th, td { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  th { font-weight: 600; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Altty vs the native macOS 27 switcher</h1>
+  <p class="lead">Real screen captures (Retina, cropped), all taken on the same Mac over the same dark terminal
+  background, system in light mode. The native switcher was captured with Altty's ⌘⇥ temporarily moved to ⌥⇥.
+  The app lists differ slightly: the native switcher showed five running apps, Altty's demo four.</p>
+
+  <h2>1 · Side by side, app names shown</h2>
+  <p class="note">The closest comparison: both show the selected app's name.</p>
+  <div class="pair">
+    <figure><img src="native-macos27.png" alt="Native macOS 27 switcher">
+      <figcaption><b>macOS 27</b> — native ⌘⇥</figcaption></figure>
+    <figure><img src="altty-new-names.png" alt="New Altty design with app names">
+      <figcaption><b>Altty, new design</b> — “Show app names” on, notification badges from the Dock</figcaption></figure>
+  </div>
+
+  <h2>1b · Notification badge, zoomed</h2>
+  <p class="note">Notion's “19”, native on the left, Altty on the right.</p>
+  <div class="pair">
+    <figure><img src="badge-native-vs-altty.png" alt="Notification badge: native vs Altty">
+      <figcaption><b>Left:</b> macOS 27 · <b>Right:</b> Altty</figcaption></figure>
+  </div>
+
+  <h2>2 · Side by side, with your settings</h2>
+  <p class="note">Your Altty settings have app names off, so the name band stays empty; the panel keeps the same size.</p>
+  <div class="pair">
+    <figure><img src="native-macos27.png" alt="Native macOS 27 switcher">
+      <figcaption><b>macOS 27</b> — native ⌘⇥</figcaption></figure>
+    <figure><img src="altty-new-your-settings.png" alt="New Altty design with your settings">
+      <figcaption><b>Altty, new design</b> — your settings (large icons, names off)</figcaption></figure>
+  </div>
+
+  <h2>3 · Before / after</h2>
+  <div class="pair">
+    <figure><img src="altty-before.png" alt="Previous Altty design">
+      <figcaption><b>Altty, before</b> — circular 20 pt corners, HUD material, light square highlight</figcaption></figure>
+    <figure><img src="altty-new-your-settings.png" alt="New Altty design">
+      <figcaption><b>Altty, now</b> — continuous corners, Liquid Glass, dark squircle well</figcaption></figure>
+  </div>
+
+  <h2>4 · Variants of the new design</h2>
+  <div class="pair">
+    <figure><img src="altty-new-dark.png" alt="New Altty design in dark appearance">
+      <figcaption><b>Dark appearance</b> (forced in mdeck only)</figcaption></figure>
+    <figure><img src="altty-new-small.png" alt="New Altty design with small icons">
+      <figcaption><b>Small icons</b> (64 pt) — same proportions, scaled</figcaption></figure>
+  </div>
+
+  <h2>Measurements</h2>
+  <p class="note">Measured on the native capture at 128 pt icons; Altty scales every value with the icon size.</p>
+  <table>
+    <tr><th></th><th>macOS 27 (measured)</th><th>Altty now</th><th>Altty before</th></tr>
+    <tr><td>Icon pitch</td><td>134 pt (128 + 6)</td><td>134 pt (128 + 6)</td><td>148 pt (144 cell + 4)</td></tr>
+    <tr><td>Panel margin</td><td>≈ 24 pt</td><td>24 pt</td><td>12 pt</td></tr>
+    <tr><td>Panel height</td><td>≈ 175 pt</td><td>176 pt</td><td>194 pt with names</td></tr>
+    <tr><td>Panel corners</td><td>≈ 57 pt, continuous</td><td>58 pt, continuous</td><td>20 pt, circular</td></tr>
+    <tr><td>Selection</td><td>≈ 120 pt dark well, ≈ 34 pt radius</td><td>120 pt dark well, 34 pt continuous radius</td><td>144 pt light square, 12 pt radius</td></tr>
+    <tr><td>Background</td><td>translucent glass, grey 0.35</td><td>clear Liquid Glass + 20 % black tint, grey 0.37</td><td>HUD material + hairline</td></tr>
+    <tr><td>Name</td><td>semibold black, in the bottom margin (4.4:1 on the glass)</td><td>semibold 13 pt white, in the bottom margin (4.8:1 light, 7.5:1 dark — WCAG AA 4.5:1)</td><td>regular 13 pt with shadow, extra 26 pt band</td></tr>
+    <tr><td>Notification badges</td><td>red circle 0.39 × icon, top-right</td><td>same, read from the Dock (Accessibility)</td><td>none</td></tr>
+  </table>
+</main>
+</body>
+</html>

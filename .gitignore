@@ -1,0 +1,59 @@
+# Build artifacts
+build/
+*.app
+*.zip
+*.dmg
+*.dSYM/
+*.icns
+
+# Signing material — never commit a private key
+*.p12
+*.pem
+*.key
+
+# Swift / Xcode, in case the folder is ever opened there
+.build/
+DerivedData/
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+.swiftpm/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+Icon?
+.Spotlight-V100
+.Trashes
+
+# Editors / agents
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.claude/settings.local.json
+.playwright-mcp/
+
+# Python (scripts/strings.py)
+__pycache__/
+*.pyc
+
+# Environment / secrets
+.env
+.env.*
+*.mobileprovision
+*.provisionprofile
+
+# Scratch
+*.log
+*.tmp
+*.bak
+*.orig
+
+# Local screenshots / scratch
+*.png
+!Assets/*.png
+!docs/**/*.png

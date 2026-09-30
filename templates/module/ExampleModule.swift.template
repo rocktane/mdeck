@@ -1,0 +1,41 @@
+import Cocoa
+
+// Replace Example / example, then copy into Sources/Modules/<Name>/.
+enum ExamplePrefs {
+    @Pref("example.option", default: true) static var option: Bool
+}
+
+final class ExampleModule: Module {
+    let id = "example"
+    let name = "Example"
+    let summary = "One sentence describing the user benefit."
+    let symbolName = "square.grid.2x2"
+    let tint = NSColor.systemBlue
+    private(set) var isRunning = false
+
+    func start() {
+        guard !isRunning else { return }
+        isRunning = true
+        // Acquire resources here, never in init or makeSettingsView.
+    }
+
+    func stop() {
+        guard isRunning else { return }
+        isRunning = false
+        // Cancel pending work, release resources and restore changed system state.
+    }
+
+    func makeSettingsView() -> NSView {
+        RowsView([
+            sectionHeader("OPTIONS"),
+            SettingsRow("Enable option", ActionSwitch(isOn: ExamplePrefs.option) {
+                ExamplePrefs.option = $0
+                // Apply immediately if running.
+            }),
+        ])
+    }
+
+    #if DEBUG
+    var hasResources: Bool { false } // Replace with checks of each owned resource.
+    #endif
+}
