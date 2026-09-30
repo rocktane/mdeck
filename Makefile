@@ -4,7 +4,7 @@ APP_BUNDLE = build/$(APP_NAME).app
 INSTALL_DIR = /Applications
 CODESIGN_ID ?= mdeck Signing
 
-.PHONY: all build debug cert icon install uninstall clean
+.PHONY: all build debug cert icon install uninstall clean release
 
 all: build
 
@@ -41,3 +41,7 @@ uninstall:
 
 clean:
 	@rm -rf build
+
+## Tag a version; GitHub Actions publishes its archive and updates the Homebrew cask.
+release:
+	@./scripts/release.sh
