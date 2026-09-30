@@ -1,0 +1,137 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build & Release
+    runs-on: macos-14
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      sha256: ${{ steps.meta.outputs.sha256 }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Show Swift version
+        run: swift --version
+
+      - name: Import signing certificate
+        env:
+          CERT_P12: ${{ secrets.SIGNING_CERT_P12 }}
+          CERT_PASS: ${{ secrets.SIGNING_CERT_PASS }}
+        run: |
+          security create-keychain -p ci build.keychain
+          security set-keychain-settings -lut 21600 build.keychain
+          security unlock-keychain -p ci build.keychain
+          security list-keychains -d user -s build.keychain
+          if [ -n "$CERT_P12" ]; then
+            # Canonical identity: every release (and local dev builds) share it,
+            # so Accessibility grants survive upgrades.
+            echo "$CERT_P12" | base64 -d > cert.p12
+            security import cert.p12 -k build.keychain -P "$CERT_PASS" -T /usr/bin/codesign
+            rm -f cert.p12
+          else
+            # Forks without the secret use an ephemeral signing identity.
+            CERT_KEYCHAIN=build.keychain ./scripts/make-cert.sh "mdeck Signing"
+          fi
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k ci build.keychain >/dev/null
+
+      - name: Check version matches tag
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Resources/Info.plist)
+          test "$RELEASE_TAG" = "v$VERSION"
+
+      - name: Build
+        run: ./build.sh --universal
+
+      - name: Package & compute SHA256
+        id: meta
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          cd build
+          ditto -c -k --sequesterRsrc --keepParent mdeck.app mdeck.zip
+          SHA=$(shasum -a 256 mdeck.zip | awk '{print $1}')
+          VERSION="${REF#refs/tags/v}"
+          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          OWNER: ${{ github.repository_owner }}
+        with:
+          name: mdeck v${{ steps.meta.outputs.version }}
+          body: |
+            ## Installation
+
+            ### Homebrew (recommended)
+            ```
+            brew install --cask ${{ github.repository_owner }}/tap/mdeck
+            ```
+
+            ### Manual
+            1. Download `mdeck.zip` below
+            2. Unzip and move `mdeck.app` to `/Applications`
+            3. Right-click → Open on first launch (self-signed, not notarized)
+
+            ## Requirements
+            - **Intel or Apple Silicon Mac** — macOS 13+
+          files: build/mdeck.zip
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+
+  update-homebrew:
+    name: Update Homebrew Tap
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tap repo
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ github.repository_owner }}/homebrew-tap
+          ssh-key: ${{ secrets.TAP_DEPLOY_KEY }}
+          path: tap
+
+      - name: Update cask
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+          SHA256: ${{ needs.release.outputs.sha256 }}
+          REPO: ${{ github.repository }}
+        run: |
+          cat > tap/Casks/mdeck.rb << CASK
+          cask "mdeck" do
+            version "$VERSION"
+            sha256 "$SHA256"
+
+            url "https://github.com/$REPO/releases/download/v#{version}/mdeck.zip"
+            name "mdeck"
+            desc "Modular macOS menu bar utilities with application CPU and memory monitoring"
+            homepage "https://github.com/$REPO"
+
+            app "mdeck.app"
+          end
+          CASK
+
+      - name: Push to tap
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+        working-directory: tap
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Casks/mdeck.rb
+          git diff --staged --quiet && echo "No changes" && exit 0
+          git commit -m "Update mdeck to v${VERSION}"
+          git push

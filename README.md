@@ -15,6 +15,16 @@ macOS 13+. Written in Swift/AppKit, built with `swiftc` alone: no Xcode project,
 ## Install
 
 ```sh
+brew install --cask rocktane/tap/mdeck
+```
+
+Or download `mdeck.zip` from [GitHub Releases](https://github.com/rocktane/mdeck/releases),
+unzip and move `mdeck.app` to `/Applications`. Release builds support Intel and Apple Silicon
+on macOS 13+. They are self-signed, not notarized; right-click → Open on first launch.
+
+To build locally:
+
+```sh
 make cert      # one-time: the self-signed "mdeck Signing" certificate (see Signing)
 make install   # builds, copies to /Applications, launches
 ```
@@ -110,3 +120,10 @@ CPU is normalized to the Mac's total capacity, memory uses physical footprints, 
 refresh at the selected interval (1, 2, 5 or 10 seconds). Hover a row to reveal its quit buttons.
 App bundles and descendant processes are grouped; shared XPC services
 and orphaned helpers may not be attributable. See [measurement details](docs/modules.md#app-monitor-measurements).
+
+## Releases
+
+Run `make release` to select a version, update the bundle version and push its tag.
+GitHub Actions builds the universal signed app, publishes `mdeck.zip`, then updates
+`Casks/mdeck.rb` in `rocktane/homebrew-tap` with the archive SHA256. CI uses
+`SIGNING_CERT_P12`, `SIGNING_CERT_PASS` and `TAP_DEPLOY_KEY` repository secrets.
