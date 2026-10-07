@@ -18,6 +18,21 @@ final class AdaptiveEffectView: NSVisualEffectView {
     }
 }
 
+/// Dark mode leaves clear glass untinted, so the background can brighten it.
+/// Refresh explicitly when changing appearance: retaining the light tint would darken it.
+@available(macOS 26.0, *)
+final class AdaptiveGlassView: NSGlassEffectView {
+    func applyTintColor() {
+        tintColor = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            ? nil : NSColor.black.withAlphaComponent(0.2)
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        applyTintColor()
+    }
+}
+
 /// Non-activating borderless HUD panel. Non-activating matters: showing the switcher must not
 /// take focus away from the current app, otherwise the menu bar flickers and the "previous app"
 /// notion gets muddled.
@@ -48,13 +63,13 @@ final class SwitcherPanel: NSPanel {
 
         switcherView.autoresizingMask = [.width, .height]
         if #available(macOS 26.0, *) {
-            let glass = NSGlassEffectView()
+            let glass = AdaptiveGlassView()
             // Clear, not regular: the native switcher is the translucent grey glass that lets
             // what is behind show through; regular renders an opaque light slab.
             glass.style = .clear
-            // Measured against the native panel over the same background: untinted clear glass
-            // comes out noticeably lighter; a 20 % black tint lands on the same grey.
-            glass.tintColor = NSColor.black.withAlphaComponent(0.2)
+            // Keep the measured light tint; dark glass follows what is behind without it.
+            glass.applyTintColor()
+            switcherView.drawsPanelBorder = true
             glass.contentView = switcherView
             background = glass
         } else {
@@ -67,7 +82,7 @@ final class SwitcherPanel: NSPanel {
             effect.wantsLayer = true
             effect.layer?.cornerCurve = .continuous
             effect.layer?.masksToBounds = true
-            effect.layer?.borderWidth = 1
+            effect.layer?.borderWidth = 0.5
             effect.applyBorderColor()
             effect.addSubview(switcherView)
             background = effect
@@ -125,6 +140,9 @@ final class SwitcherPanel: NSPanel {
         // A theme change while the panel was hidden may not have reached the view, so the
         // layer-stored border colour is refreshed on every summon.
         (background as? AdaptiveEffectView)?.applyBorderColor()
+        if #available(macOS 26.0, *) {
+            (background as? AdaptiveGlassView)?.applyTintColor()
+        }
 
         setFrame(NSRect(origin: origin, size: size), display: false)
         switcherView.frame = NSRect(origin: .zero, size: size)

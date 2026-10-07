@@ -21,20 +21,26 @@ enum Palette {
         }
     }
 
-    /// The squircle "well" behind the selected app: darker than the glass in both themes, like
-    /// the native switcher's.
+    /// Native selection: a graphite well in light mode, a translucent white halo in dark.
     static var selection: NSColor {
         let strong = highContrast
         return dynamic("AlttySelection",
-                       light: { .black.withAlphaComponent(strong ? 0.65 : 0.45) },
-                       dark: { .black.withAlphaComponent(strong ? 0.70 : 0.50) })
+                       light: { .black.withAlphaComponent(strong ? 0.65 : 0.55) },
+                       dark: { .white.withAlphaComponent(strong ? 0.80 : 0.60) })
     }
 
-    /// Hairline around the panel, before macOS 26 (the glass draws its own edge).
+    /// Soft neutral edge around the selected well, scaled with the icons by `SwitcherView`.
+    static var selectionHalo: NSColor {
+        dynamic("AlttySelectionHalo",
+                light: { .white.withAlphaComponent(0.10) },
+                dark: { .white.withAlphaComponent(0.18) })
+    }
+
+    /// Fine reflective edge on the glass, and on the older HUD material.
     static var border: NSColor {
         let strong = highContrast
         return dynamic("AlttyBorder",
-                       light: { .black.withAlphaComponent(strong ? 0.45 : 0.10) },
-                       dark: { .white.withAlphaComponent(strong ? 0.55 : 0.12) })
+                       light: { .white.withAlphaComponent(strong ? 0.65 : 0.22) },
+                       dark: { .white.withAlphaComponent(strong ? 0.65 : 0.25) })
     }
 }
