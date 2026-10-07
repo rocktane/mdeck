@@ -17,6 +17,8 @@ final class SwitcherView: NSView {
         var padding: CGFloat { max((icon * 0.19).rounded(), 20) }
         var wellInset: CGFloat { (icon * 0.031).rounded() }
         var wellRadius: CGFloat { (icon - wellInset * 2) * 0.28 }
+        var haloBlur: CGFloat { max(1, icon * 0.016) }
+        var haloOutset: CGFloat { haloBlur * 3 }
         /// Concentric with the well: its radius plus the distance between the two edges.
         var cornerRadius: CGFloat { wellRadius + padding }
         var fontSize: CGFloat { max(11, (icon * 0.1).rounded()) }
@@ -43,14 +45,16 @@ final class SwitcherView: NSView {
     }
     var showsLabel = true { didSet { needsDisplay = true } }
     var showsBadges = true { didSet { needsDisplay = true } }
+    /// Older materials have a layer border; Liquid Glass gets a fine reflective edge here.
+    var drawsPanelBorder = false { didSet { needsDisplay = true } }
 
     /// Moving the highlight only invalidates the two cells involved and the label band, not
     /// the whole row — every other icon would otherwise be redrawn on each hover.
     var selection: Int = 0 {
         didSet {
             guard selection != oldValue else { return }
-            setNeedsDisplay(cellRect(oldValue))
-            setNeedsDisplay(cellRect(selection))
+            setNeedsDisplay(drawingRect(oldValue))
+            setNeedsDisplay(drawingRect(selection))
             setNeedsDisplay(labelBand)
             announceSelection()
         }
@@ -103,6 +107,11 @@ final class SwitcherView: NSView {
                       width: m.icon, height: m.icon)
     }
 
+    /// Include the halo when invalidating a cell so moving selection leaves no bright trail.
+    private func drawingRect(_ index: Int) -> NSRect {
+        cellRect(index).insetBy(dx: -metrics.haloOutset, dy: -metrics.haloOutset)
+    }
+
     /// The bottom margin, where the selected app's name is drawn.
     private var labelBand: NSRect {
         NSRect(x: 0, y: 0, width: bounds.width, height: metrics.padding)
@@ -117,15 +126,30 @@ final class SwitcherView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         guard !items.isEmpty else { return }
 
+        if drawsPanelBorder {
+            let path = NSBezierPath(continuousRoundedRect: bounds.insetBy(dx: 0.25, dy: 0.25),
+                                    cornerRadius: metrics.cornerRadius - 0.25)
+            path.lineWidth = 0.5
+            Palette.border.setStroke()
+            path.stroke()
+        }
+
         for (i, item) in items.enumerated() {
             let rect = cellRect(i)
-            guard rect.intersects(dirtyRect) else { continue }
+            guard drawingRect(i).intersects(dirtyRect) else { continue }
 
             if i == selection {
                 let m = metrics
+                NSGraphicsContext.saveGraphicsState()
+                let halo = NSShadow()
+                halo.shadowColor = Palette.selectionHalo
+                halo.shadowBlurRadius = m.haloBlur
+                halo.shadowOffset = .zero
+                halo.set()
                 Palette.selection.setFill()
                 NSBezierPath(continuousRoundedRect: rect.insetBy(dx: m.wellInset, dy: m.wellInset),
                              cornerRadius: m.wellRadius).fill()
+                NSGraphicsContext.restoreGraphicsState()
             }
 
             let iconRect = rect
@@ -241,10 +265,8 @@ final class SwitcherView: NSView {
         style.alignment = .center
         style.lineBreakMode = .byTruncatingTail
 
-        // Semibold, straight on the glass, like the native name — but white: on the grey glass
-        // black only reaches 4.4:1, under WCAG's 4.5:1 for text this size, and even a 95 %
-        // grey falls to 4.25:1; white gives 4.8:1 in light mode, 7.5:1 in dark. The soft shadow
-        // holds it when a light window behind brightens the glass.
+        // Semibold, straight on the glass. Keep the name white with a soft shadow so it
+        // remains legible as light and dark windows behind it change the glass's brightness.
         let shadow = NSShadow()
         shadow.shadowColor = NSColor.black.withAlphaComponent(0.35)
         shadow.shadowBlurRadius = 2
