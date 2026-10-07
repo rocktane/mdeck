@@ -240,11 +240,18 @@ final class SwitcherController {
         guard let target, !target.app.isTerminated else { return }
         switch target.target {
         case .app:
-            target.app.activate(options: [.activateAllWindows])
+            // Opening settings turns mdeck into a regular app. A background regular app's
+            // plain activation request can leave focus unchanged, even when it returns true.
+            // Explicitly transfer activation from the app the user is switching away from.
+            if #available(macOS 14.0, *), let source = NSWorkspace.shared.frontmostApplication {
+                target.app.activate(from: source, options: [.activateAllWindows])
+            } else {
+                target.app.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+            }
         case .window(let window, let isMinimized):
             WindowDetection.raise(window, of: target.app, isMinimized: isMinimized)
         }
-        MRUTracker.shared.touch(target.app.processIdentifier)
+        // MRUTracker observes actual activations; a request that fails must not reorder it.
     }
 
     private func cancel() {
