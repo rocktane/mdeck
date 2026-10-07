@@ -109,6 +109,19 @@ Debug build flags (`build/mdeck.app/Contents/MacOS/mdeck …`):
 | `--badge-contrast` | text colour and WCAG contrast chosen for each badge colour, light and dark |
 | `--appearance dark\|light` | force a theme |
 
+To test the running Altty instance with real Cmd+Tab input, keep two apps with windows open
+on the current Space and pass their bundle IDs:
+
+```sh
+swift scripts/test-altty.swift com.t3tools.t3code com.mitchellh.ghostty 5 --settings-open
+```
+
+The test host needs Accessibility to read the switcher and permission to control System Events.
+It checks actual foreground changes, quick and held shortcuts, Escape cancellation, and MRU
+ordering after a failed activation. `--settings-open` also exercises switching while mdeck's
+settings make it a regular app; omit it to test the current state. The test restores the
+original foreground app and leaves settings open when that flag is used.
+
 Adding a module: see [the module contract](docs/modules.md) and [the template](templates/module/ExampleModule.swift.template).
 
 ### App Monitor
