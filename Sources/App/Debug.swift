@@ -6,10 +6,13 @@ import Cocoa
 /// can be checked without touching the user's screen.
 ///
 ///   --snapshot-settings <path> [--page <id>]   the settings window, on a page
+///                     [--full-page]            the whole page, scrolled part included
 ///   --altty-snapshot <path>                    the switcher panel
 ///   --altty-demo                               the switcher panel for 5 s
 ///   --dock-info                                displays, Dock edge and Dock display
 ///   --lifecycle-test                           start and stop every module, check nothing is left
+///   --clean-url <url>                          what Clean Links does with a link
+///   --cleanlinks-hud <path>                    Clean Links' notice
 ///   --appearance dark|light
 enum Debug {
     static func handleFlags() -> Bool {
@@ -79,6 +82,14 @@ enum Debug {
             }
             return true
         }
+        if let path = value(after: "--cleanlinks-hud") {
+            CleanLinksDebug.snapshotHUD(to: path)
+            return true
+        }
+        if let url = value(after: "--clean-url") {
+            CleanLinksDebug.cleanURL(url)
+            return true
+        }
         if args.contains("--lifecycle-test") {
             lifecycleTest()
             return true
@@ -95,7 +106,11 @@ enum Debug {
         if let path = value(after: "--snapshot-settings") {
             SettingsWindowController.shared.show(page: value(after: "--page") ?? "general")
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                capture(window: SettingsWindowController.shared.window, to: path)
+                if args.contains("--full-page") {
+                    captureFullPage(of: SettingsWindowController.shared.window, to: path)
+                } else {
+                    capture(window: SettingsWindowController.shared.window, to: path)
+                }
                 NSApp.terminate(nil)
             }
             return true
@@ -134,7 +149,14 @@ enum Debug {
             if let d = m as? DockLockModule {
                 expect(d.hasEdgeGuard == Permissions.isAccessibilityTrusted, "Dock Lock tap iff Accessibility")
             }
+            if let c = m as? CleanLinksModule {
+                expect(c.watchMode != .stopped, "Clean Links watches the clipboard")
+                expect(c.debugHasHotkey == (CleanLinksPrefs.pasteOriginalShortcut != nil), "Clean Links registered its shortcut")
+            }
             RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+            if let c = m as? CleanLinksModule {
+                expect(c.rules.rules != nil, "Clean Links loaded its rules")
+            }
             if let monitor = m as? AppMonitorModule {
                 expect(monitor.debugVerifyPanelBehavior(), "App Monitor limits rankings to six, fits content, and toggles with its status button")
                 expect(monitor.debugVerifyPinning(), "App Monitor pin preserves panel; unpin dismisses and removes monitors")
@@ -150,12 +172,48 @@ enum Debug {
                 expect(m.isRunning, "App Monitor restarted")
                 m.stop()
             }
+            if let c = m as? CleanLinksModule {
+                expect(!c.hasResources, "Clean Links released its watcher, shortcut, timer, notice, requests and rules")
+                c.start()
+                expect(c.isRunning && c.watchMode != .stopped, "Clean Links restarted")
+                c.stop()
+                expect(!c.hasResources, "Clean Links released everything after restart")
+            }
             expect(HotkeyManager.shared.registeredCount == 0, "\(m.name) left no hotkey")
             if let d = m as? DockLockModule { expect(!d.hasEdgeGuard, "Dock Lock removed its tap") }
         }
         expect(!NativeSwitcher.isDisabledByUs, "native ⌘Tab untouched")
+        for (what, ok) in CleanLinksDebug.verify() { expect(ok, what) }
         print(failures == 0 ? "ALL PASSED" : "\(failures) FAILURE(S)")
         exit(failures == 0 ? 0 : 1)
+    }
+
+    /// The whole scrollable page, one capture per screenful (`out-1.png`, `out-2.png`…),
+    /// scrolling the real window so each part is drawn exactly as on screen.
+    static func captureFullPage(of window: NSWindow?, to path: String) {
+        func scrollViews(in view: NSView) -> [NSScrollView] {
+            (view as? NSScrollView).map { [$0] } ?? [] + view.subviews.flatMap(scrollViews)
+        }
+        guard let content = window?.contentView,
+              let scroll = scrollViews(in: content).max(by: {
+                  ($0.documentView?.bounds.height ?? 0) < ($1.documentView?.bounds.height ?? 0)
+              }),
+              let page = scroll.documentView else { return }
+        let visible = scroll.contentView.bounds.height
+        let base = (path as NSString).deletingPathExtension
+        var offset: CGFloat = 0
+        var index = 1
+        while true {
+            let y = min(offset, max(0, page.bounds.height - visible))
+            scroll.contentView.scroll(to: NSPoint(x: 0, y: page.isFlipped ? y : page.bounds.height - visible - y))
+            scroll.reflectScrolledClipView(scroll.contentView)
+            window?.displayIfNeeded()
+            RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+            capture(window: window, to: "\(base)-\(index).png")
+            if y + visible >= page.bounds.height { break }
+            offset += visible * 0.9
+            index += 1
+        }
     }
 
     static func capture(window: NSWindow?, to path: String) {
