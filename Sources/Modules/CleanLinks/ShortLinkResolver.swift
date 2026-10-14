@@ -21,6 +21,8 @@ final class ShortLinkResolver: NSObject, URLSessionDataDelegate {
     private var session: URLSession?
     private var pending: [Int: (URL?) -> Void] = [:]
     private var redirects: [Int: Int] = [:]
+    /// Tasks whose redirect chain tried to leave the public internet.
+    private var blocked: Set<Int> = []
     private let lock = NSLock()
 
     var hasPendingWork: Bool { locked { !pending.isEmpty } }
@@ -35,9 +37,23 @@ final class ShortLinkResolver: NSObject, URLSessionDataDelegate {
         (builtInDomains + extra).contains { DomainList.covers($0, host: host) }
     }
 
+    /// Copying a link must never make mdeck send a request into the local network (a router's
+    /// admin page, a NAS…): every hop of a resolution has to be an http(s) URL on a public-
+    /// looking host name. IP literals, single-label names and local suffixes are refused.
+    static func isPublic(_ url: URL?) -> Bool {
+        guard let url, let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https",
+              let host = url.host?.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: ".")),
+              host.contains("."), !host.contains(":") else { return false }
+        if host.split(separator: ".").allSatisfy({ $0.allSatisfy(\.isNumber) }) { return false }
+        let local = ["localhost", "local", "localdomain", "internal", "intranet", "lan", "home", "corp",
+                     "home.arpa", "in-addr.arpa", "ip6.arpa"]
+        return !local.contains { host == $0 || host.hasSuffix("." + $0) }
+    }
+
     /// `completion` runs on an arbitrary queue with the final link, or nil when the link does
     /// not redirect anywhere useful (dead link, error, timeout, a consent wall).
     func resolve(_ url: URL, completion: @escaping (URL?) -> Void) {
+        guard Self.isPublic(url) else { return completion(nil) }
         let session = self.session ?? makeSession()
         var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: Self.timeout)
         request.httpMethod = "GET"
@@ -55,6 +71,7 @@ final class ShortLinkResolver: NSObject, URLSessionDataDelegate {
         locked {
             pending.removeAll()
             redirects.removeAll()
+            blocked.removeAll()
         }
         session?.invalidateAndCancel()
         session = nil
@@ -78,6 +95,7 @@ final class ShortLinkResolver: NSObject, URLSessionDataDelegate {
     private func finish(_ task: URLSessionTask, _ url: URL?) {
         let completion = locked { () -> ((URL?) -> Void)? in
             redirects[task.taskIdentifier] = nil
+            blocked.remove(task.taskIdentifier)
             return pending.removeValue(forKey: task.taskIdentifier)
         }
         completion?(url)
@@ -85,6 +103,10 @@ final class ShortLinkResolver: NSObject, URLSessionDataDelegate {
 
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
                     newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
+        guard Self.isPublic(request.url) else {
+            locked { _ = blocked.insert(task.taskIdentifier) }
+            return completionHandler(nil)
+        }
         locked { redirects[task.taskIdentifier, default: 0] += 1 }
         completionHandler(request)
     }
@@ -92,10 +114,9 @@ final class ShortLinkResolver: NSObject, URLSessionDataDelegate {
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
                     completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
         completionHandler(.cancel)
-        let hops = locked { redirects[dataTask.taskIdentifier] ?? 0 }
+        let (hops, wasBlocked) = locked { (redirects[dataTask.taskIdentifier] ?? 0, blocked.contains(dataTask.taskIdentifier)) }
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        guard hops > 0, (200..<400).contains(status), let final = response.url,
-              let scheme = final.scheme?.lowercased(), scheme == "http" || scheme == "https",
+        guard !wasBlocked, hops > 0, (200..<400).contains(status), let final = response.url, Self.isPublic(final),
               let host = final.host?.lowercased(), !host.hasPrefix("consent."),
               final != dataTask.originalRequest?.url
         else { return finish(dataTask, nil) }

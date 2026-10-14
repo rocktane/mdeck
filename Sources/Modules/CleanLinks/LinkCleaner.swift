@@ -220,9 +220,15 @@ struct LinkCleaner {
     /// anything else, which is then left alone.
     static func link(in text: String) -> String? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.count <= 8192, !trimmed.contains(where: \.isWhitespace),
+        guard trimmed.count <= 8192, isSingleToken(trimmed),
               let host = host(of: trimmed), !host.isEmpty else { return nil }
         return trimmed
+    }
+
+    /// No whitespace and no control character anywhere: what goes back to the clipboard must
+    /// never carry a line break or an escape that a terminal would act on when pasted.
+    static func isSingleToken(_ text: String) -> Bool {
+        !text.unicodeScalars.contains { CharacterSet.whitespacesAndNewlines.contains($0) || CharacterSet.controlCharacters.contains($0) }
     }
 
     /// Nil unless the string is an http(s) URL. Tolerates the unencoded characters (accents,
@@ -245,6 +251,8 @@ struct LinkCleaner {
             pass(&report)
             if report.url == before { break }
         }
+        // Belt and braces: whatever the rules did, the result is one clean token or nothing.
+        guard Self.isSingleToken(report.url), Self.host(of: report.url) != nil else { return CleaningReport(url: input) }
         return report
     }
 
@@ -352,7 +360,10 @@ struct LinkCleaner {
             guard let decoded = target.removingPercentEncoding, decoded != target else { break }
             target = decoded
         }
-        return host(of: target) == nil ? nil : target
+        // Decoding can produce anything: a `%0A` hidden in a wrapped link must not become a line
+        // break in the clipboard (pasted into a terminal, that runs a command).
+        guard isSingleToken(target), host(of: target) != nil else { return nil }
+        return target
     }
 
     /// Google's AMP viewer and the AMP cache serve a publisher's page under their own address;

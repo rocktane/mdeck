@@ -68,6 +68,20 @@ enum CleanLinksDebug {
         let wrapped = noRedirects.clean("https://www.google.com/url?q=https%3A%2F%2Fexample.com%2F&sa=D")
         results.append(("redirects off keeps the wrapper", !wrapped.unwrapped && wrapped.url.hasPrefix("https://www.google.com/url?")))
 
+        let smuggled = cleaner.clean("https://www.google.com/url?q=https%3A%2F%2Fexample.com%2F%250Aecho%2520pwned&sa=D")
+        results.append(("encoded line break in a wrapped link is not unwrapped",
+                        !smuggled.unwrapped && LinkCleaner.isSingleToken(smuggled.url)))
+        let hosts: [(String, Bool)] = [
+            ("https://bit.ly/x", true), ("https://www.amazon.fr/dp/1", true), ("http://192.168.1.1/admin", false),
+            ("http://127.0.0.1:8080/", false), ("http://[::1]/", false), ("http://localhost/", false),
+            ("http://nas.local/", false), ("http://router/", false), ("http://printer.home.arpa/", false),
+            ("ftp://example.com/", false), ("http://2130706433/", false),
+        ]
+        for (url, expected) in hosts {
+            results.append(("short-link hop \(url) \(expected ? "allowed" : "refused")",
+                            ShortLinkResolver.isPublic(URL(string: url)) == expected))
+        }
+
         let amazon = cleaner.clean("https://www.amazon.com/dp/B000/ref=x?tag=a-20&qid=1")
         results.append(("summary “\(amazon.summary)”", amazon.summary == "3 trackers removed"))
 
