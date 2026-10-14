@@ -9,6 +9,7 @@ or off; a module that is off does not run at all — no observer, no shortcut, n
 | **Altty** | An app switcher (⌥⇥ by default, ⌘⇥ possible) that leaves out apps with no open window. | Accessibility only for “Detect windows on all Spaces” |
 | **App Monitor** | Lists CPU and memory usage grouped by application, with menu bar gauges and an optional pinned panel. | none |
 | **Dock Lock** | Keeps the Dock on one display — the MacBook’s screen by default — even with external screens connected. | Accessibility |
+| **Clean Links** | Removes trackers (utm_*, fbclid, affiliate tags…) from the links you copy, unwraps redirects and AMP, expands short links. | Accessibility only for the “Paste the original link” shortcut |
 
 macOS 13+. Written in Swift/AppKit, built with `swiftc` alone: no Xcode project, no SwiftPM.
 
@@ -79,6 +80,41 @@ The target display is chosen in the module page (built-in by default); an extern
 remembered by vendor/model/serial, so it survives unplugging. While the target is not connected,
 Dock Lock stands aside.
 
+### Clean Links
+
+When the clipboard holds a single web link — and nothing else — Clean Links replaces it with the
+same link minus its trackers, and shows a short notice at the bottom of the screen (can be
+turned off). What it removes, each with its own switch:
+
+- tracking parameters (`utm_*`, `fbclid`, `gclid`, YouTube’s `si`…) and affiliate tags, from
+  the [ClearURLs](https://gitlab.com/ClearURLs/rules) rules (200-odd sites plus global rules) and a
+  few additions of mdeck’s own (x.com, LinkedIn, Outlook Safe Links, Slack, Threads);
+- tracking written into the path (Amazon’s `/ref=…`);
+- redirect wrappers (`google.com/url?q=…`, `l.facebook.com`…), read from the link itself;
+- AMP pages (Google’s viewer, the AMP cache), replaced by the publisher’s address;
+- `#:~:text=` highlight fragments;
+- short links (bit.ly, t.co, amzn.to… plus your own list), followed to where they lead with one
+  cookie-less request whose body is never downloaded. The shortening service does see that
+  request. Up to 3 s; on failure the link is left as it was.
+
+Your own rules: sites never touched, parameters to keep or to remove (`utm_*`, `github.com:ref`),
+extra shortener domains, and apps whose copies are left alone. Copies marked as secret by
+password managers, and pastes from clipboard histories, are never touched. **⌃⌘V** (changeable)
+pastes the original link into the front app and keeps the clean one in the clipboard; it posts
+⌘V, hence the Accessibility permission.
+
+The rules ship with the app and are refreshed weekly from `rules2.clearurls.xyz`: the download
+must match the SHA-256 published next to it, and is kept in
+`~/Library/Application Support/mdeck/CleanLinks/`. ClearURLs’ rules are LGPL-3.0
+(see `Resources/ClearURLs/`).
+
+macOS has no clipboard notification. While Tinycast runs with its
+clipboard history on, Clean Links watches Tinycast’s history database instead of polling: it
+cleans right after Tinycast saved the copy, so the history keeps both the original and the clean
+link. Copies Tinycast does not save (apps excluded in Tinycast) are then not cleaned either.
+Without Tinycast the clipboard is checked twice a second. Either way, a ⌘V within about half a
+second of the ⌘C can still paste the original.
+
 ## Signing
 
 The Accessibility grant is bound to the app’s code identity. Ad hoc, that identity is the code
@@ -100,11 +136,13 @@ Debug build flags (`build/mdeck.app/Contents/MacOS/mdeck …`):
 
 | Flag | |
 |---|---|
-| `--snapshot-settings out.png [--page general\|nightshift\|altty\|docklock]` | captures the settings window (no Screen Recording needed for our own windows) |
+| `--snapshot-settings out.png [--page general\|nightshift\|altty\|docklock\|appmonitor\|cleanlinks] [--full-page]` | captures the settings window (no Screen Recording needed for our own windows); `--full-page` scrolls through the whole page, one `out-N.png` per screenful |
 | `--altty-snapshot out.png` / `--altty-demo` | the switcher panel |
 | `--appmonitor-test` / `--appmonitor-snapshot out.png` | checks real samples / captures the application rankings |
-| `--lifecycle-test` | starts and stops every module, checks nothing is left behind |
+| `--lifecycle-test` | starts and stops every module, checks nothing is left behind; also runs Clean Links’ cleaning, pasteboard and watcher checks |
 | `--dock-info` | displays, Dock edge, where the Dock is |
+| `--clean-url <url>` | what Clean Links does with a link, short-link expansion included |
+| `--cleanlinks-hud out.png` | captures Clean Links’ notice |
 | `--menu-size` | the menu bar menu's computed size |
 | `--badge-contrast` | text colour and WCAG contrast chosen for each badge colour, light and dark |
 | `--appearance dark\|light` | force a theme |
