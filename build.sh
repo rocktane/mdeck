@@ -57,7 +57,7 @@ FLAGS=(-O -wmo)
 
 compile() { # arch, output
   swiftc "${FLAGS[@]}" -target "$1-apple-macos13.0" \
-    -framework Cocoa -framework Carbon -framework ApplicationServices -framework ServiceManagement \
+    -framework Cocoa -framework Carbon -framework ApplicationServices -framework ServiceManagement -framework IOKit \
     -o "$2" "${SOURCES[@]}"
 }
 

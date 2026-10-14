@@ -9,6 +9,7 @@ or off; a module that is off does not run at all — no observer, no shortcut, n
 | **Altty** | An app switcher (⌥⇥ by default, ⌘⇥ possible) that leaves out apps with no open window. | Accessibility only for “Detect windows on all Spaces” |
 | **App Monitor** | Lists CPU and memory usage grouped by application, with menu bar gauges and an optional pinned panel. | none |
 | **Dock Lock** | Keeps the Dock on one display — the MacBook’s screen by default — even with external screens connected. | Accessibility |
+| **Keep Awake** | Prevents idle system and/or display sleep, indefinitely, for a duration, until a chosen time, or automatically while Claude Code or Codex works. | none |
 | **Clean Links** | Removes trackers (utm_*, fbclid, affiliate tags…) from the links you copy, unwraps redirects and AMP, expands short links. | Accessibility only for the “Paste the original link” shortcut |
 
 macOS 13+. Written in Swift/AppKit, built with `swiftc` alone: no Xcode project, no SwiftPM.
@@ -80,6 +81,40 @@ The target display is chosen in the module page (built-in by default); an extern
 remembered by vendor/model/serial, so it survives unplugging. While the target is not connected,
 Dock Lock stands aside.
 
+### Keep Awake
+
+Enable the module to add its cup to the menu bar. An outlined cup means idle; a filled cup means
+a session is active. **Start Keep Awake** uses the default duration; **Start For** / **Stop In**
+offers 5, 15 or 30 minutes, 1, 2, 4 or 8 hours, indefinitely, and a custom duration or end date/time.
+Choosing a new duration replaces the current deadline. Custom sessions support 1 minute to 7 days.
+Timed sessions show an optional countdown next to the cup. Controls also appear under Keep Awake
+in mdeck's main menu, independently of the dedicated cup.
+
+**Prevent system sleep** and **Prevent display sleep** are independent and apply immediately to
+a running session. By default only the system is protected, so displays may sleep during downloads
+or builds. Turning both protections off ends the session. Enabling the module starts idle unless
+**Start a session when enabled** is selected; that option also starts a fresh session when mdeck
+launches with the module enabled. Expiration does not disable the module or restart the session.
+The default duration affects the next start, not an existing session. Sessions are not resumed
+after quit or crash.
+
+Inspired by [Keepresso](https://github.com/gyorgysh/keepresso), with an independent Swift/AppKit
+implementation using public IOPM APIs. No Accessibility, administrator helper or permanent
+`caffeinate` process is needed. Each timed assertion has a macOS release timeout as well as the
+app's timer. Stop, disable and quit release the module's own assertions; other apps' assertions
+remain in effect. This prevents **idle sleep**: explicit Sleep, lid closure and low-battery sleep
+are not overridden. It does not simulate presence, control brightness, disable screen locking,
+or provide Keepresso's triggers, automation, closed-display helper or headless tools.
+See [ownership and timing details](docs/modules.md#keep-awake).
+
+**Stay awake while Claude Code or Codex works** (on by default) holds the same protections, with no
+session and no deadline, while an agent is answering or running a tool, then lets the Mac sleep
+again. Open but idle sessions do not count. Detection needs no hook or configuration: a write to a
+transcript (`~/.claude/projects`, `~/.codex/sessions`) counts for the **quiet period** (5 minutes
+by default, to cover long model turns), and a command started by a `claude` or `codex` process
+counts for as long as it runs. This covers the CLIs, the desktop apps and tools built on them.
+A background command left running by an agent (a dev server, for instance) keeps the Mac awake
+until it exits. A manual session ending during agent work leaves the agent hold in place.
 ### Clean Links
 
 When the clipboard holds a single web link — and nothing else — Clean Links replaces it with the
@@ -136,9 +171,13 @@ Debug build flags (`build/mdeck.app/Contents/MacOS/mdeck …`):
 
 | Flag | |
 |---|---|
-| `--snapshot-settings out.png [--page general\|nightshift\|altty\|docklock\|appmonitor\|cleanlinks] [--full-page]` | captures the settings window (no Screen Recording needed for our own windows); `--full-page` scrolls through the whole page, one `out-N.png` per screenful |
+| `--snapshot-settings out.png [--page general\|nightshift\|altty\|docklock\|appmonitor\|cleanlinks\|keepawake] [--full-page]` | captures the settings window (no Screen Recording needed for our own windows); `--full-page` scrolls through the whole page, one `out-N.png` per screenful |
 | `--altty-snapshot out.png` / `--altty-demo` | the switcher panel |
 | `--appmonitor-test` / `--appmonitor-snapshot out.png` | checks real samples / captures the application rankings |
+| `--keepawake-test` | checks real kernel assertions, rollback, deadlines, expiration and complete teardown; restores Keep Awake preferences |
+| `--keepawake-agents` | prints which agents are working right now, from the real transcripts and process tree |
+| `--keepawake-snapshot out.png` | captures the custom session panel |
+| `--keepawake-menu-snapshot out.png [--keepawake-active]` | captures a diagnostic window listing the native menu entries, optionally during a timed session (not a screenshot of the system menu) |
 | `--lifecycle-test` | starts and stops every module, checks nothing is left behind; also runs Clean Links’ cleaning, pasteboard and watcher checks |
 | `--dock-info` | displays, Dock edge, where the Dock is |
 | `--clean-url <url>` | what Clean Links does with a link, short-link expansion included |
