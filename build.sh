@@ -43,6 +43,8 @@ if [[ ! -f "$ICNS" || Assets/icon-1024.png -nt "$ICNS" ]]; then
   rm -rf "$ICONSET"
 fi
 cp "$ICNS" "$APP/Contents/Resources/mdeck.icns"
+# Clean Links' built-in rule database (ClearURLs, LGPL-3.0), used until a download replaces it.
+cp Resources/ClearURLs/data.minify.json "$APP/Contents/Resources/clearurls.json"
 
 # Every module lives in its own folder; they are all one module for the compiler.
 SOURCES=()

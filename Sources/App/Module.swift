@@ -64,6 +64,7 @@ final class ModuleManager {
         DockLockModule(),
         AppMonitorModule(),
         KeepAwakeModule(),
+        CleanLinksModule(),
     ]
 
     private init() {}
