@@ -48,6 +48,79 @@ Never use a displayed name to select a process to terminate.
    in both light and dark appearances. Check errors and empty/unavailable states.
 5. Add the module, permissions and measurement limitations to README.
 
+## Keep Awake
+
+ID: `keepawake`; preferences: `keepawake.*`; default disabled; no permission required. The module
+and its settings view are inert on construction. `start()` owns one NSStatusItem and one workspace
+wake observer. A session owns at most one `PreventUserIdleSystemSleep` assertion and one
+`PreventUserIdleDisplaySleep` assertion, acquired with `IOPMAssertionCreateWithDescription`.
+The two choices are independent. Failure to acquire either requested assertion releases the
+entire newly acquired set and exposes the IOKit error in settings/menu status. Both options off
+means no session. Settings changes reconcile a running session without extending its deadline.
+
+Only a timed session owns a recurring timer (1 second, common run-loop modes). Frequent countdown
+updates refresh only local UI; starts, stops, errors and configuration changes call `noteChange()`.
+Every timed assertion also uses `TimeoutActionRelease` so powerd releases it independently of
+the UI run loop. The powerd timeout is rounded up to whole seconds to avoid early release when
+reapplying settings, so the fallback can lag the deadline by less than a second. Duration
+sessions use `mach_continuous_time`, including elapsed time asleep;
+clock adjustments cannot extend them. End-time sessions also check the chosen wall-clock date:
+moving the clock forward can end them early, moving it backward cannot extend the original
+elapsed-time budget. A workspace wake callback reconciles expiration immediately after waking.
+Timers reject old lifecycle generations and replaced sessions. UI may catch up on the next tick
+after powerd's timeout; it does not promise subsecond countdown precision.
+
+`stop()` invalidates the timer, releases owned assertions, removes the wake observer, closes and
+discards the custom session panel, cancels menu tracking and removes the status item. Repeated
+stop is safe and can retry a failed assertion release; restart recreates fresh resources. Expired
+assertions already released by powerd are tolerated. The module never changes persistent power
+settings or launches a helper. macOS releases a process's assertions when it exits, including on
+crash. Neither an active session nor its deadline is persisted.
+
+The dedicated cup remains available while the enabled module is idle. The main-menu visibility
+flag is owned by ModuleManager and affects the entry in mdeck's menu. The custom session panel
+does not change NSApp's activation policy and owns no monitors or observers. Its date/time picker
+accepts a future date within 7 days; its duration field accepts whole minutes from 1 to 10,080.
+Default duration and automatic start affect the next start, while system/display protection and
+countdown visibility update immediately. Automatic start runs only on enable/launch, not expiry.
+
+Reference examined: [Keepresso README](https://github.com/gyorgysh/keepresso/blob/e9d96264d9500e5c3b0bc904d303d13fb3be2d0d/README.md),
+[PowerAssertion.swift](https://github.com/gyorgysh/keepresso/blob/e9d96264d9500e5c3b0bc904d303d13fb3be2d0d/Sources/KeepressoCore/PowerAssertion.swift)
+and [SleepPreventionOptions.swift](https://github.com/gyorgysh/keepresso/blob/e9d96264d9500e5c3b0bc904d303d13fb3be2d0d/Sources/KeepressoCore/SleepPreventionOptions.swift),
+commit `e9d96264d9500e5c3b0bc904d303d13fb3be2d0d` (1.26.0). These confirm independent system/display
+assertions, indefinite/timed/end-time sessions, quick stop durations, countdown and optional
+start on launch. mdeck implements that manual keep-awake workflow, not Keepresso's broader
+trigger engine, presence simulation, automation or privileged closed-display/headless features.
+Assertions prevent idle sleep only: explicit Sleep, lid closure and critical battery protection
+can still put the Mac to sleep. Screen saver/lock and other applications' assertions remain under
+macOS/their owners' control. Actual sleep behavior depends on hardware and power policy.
+
+Agent mode (`keepawake.whileAgentsWork`, default on; `keepawake.agentGraceMinutes`, default 5) is
+owned by `AgentActivityMonitor`, created only while the module runs and the option is on. It owns one
+FSEvents stream per existing transcript folder (`~/.claude/projects`, `~/.codex/sessions`; a folder
+created later is picked up on the next poll) and one 10-second timer. Process presence and CPU time
+are not signals: idle sessions keep their process and MCP servers busy. Work is a transcript write
+within the quiet period, or a non-zombie child of an agent process that is a shell or started more
+than 30 seconds after the agent (MCP servers start with it). The native Claude installer runs
+`~/.local/share/claude/versions/<version>`, whose kernel name is the version, so agents are also
+matched by executable path. An agent hold acquires the selected assertions without a timeout and
+without creating a session: `isActive` and the Start/Stop controls stay about manual sessions. A
+timed session during agent work loses its powerd timeout; when agents go idle, the remaining
+timeout is restored, or the assertions are released. Expiry of a manual session leaves the hold.
+`stop()` stops the monitor before releasing assertions; its callbacks are generation-checked.
+
+`--keepawake-test` and `--lifecycle-test` verify real assertion types/levels using
+`IOPMAssertionCopyProperties`, independent modes, immediate settings, partial-failure rollback,
+deadline preservation, invalid inputs, kernel timeout while the run loop is blocked, expiration,
+replacement, panel ownership, repeated stop and restart, the agent hold (untimed assertion, timeout
+lift/restore, expiry under the hold, protections off) and the monitor against a temporary folder
+and a real shell child. `--keepawake-agents` reports live detection. Tests restore all changed Keep Awake
+preferences, including previously absent keys. For a manual diagnostic, `pmset -g assertions`
+shows names beginning with `mdeck Keep Awake`; they must disappear after stop/disable or timeout.
+Inspect `--snapshot-settings … --page keepawake`, `--keepawake-snapshot …` and the diagnostic
+menu-entry snapshot in light/dark appearances. Physical idle sleep, lid behavior and long sessions
+require manual hardware validation; automated checks do not force this Mac to sleep.
+
 ## App Monitor measurements
 
 CPU lists use differences in cumulative user + system CPU time between samples, normalized by

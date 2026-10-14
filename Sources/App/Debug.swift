@@ -83,6 +83,50 @@ enum Debug {
             lifecycleTest()
             return true
         }
+        if args.contains("--keepawake-test") {
+            ModuleManager.shared.stopAll()
+            let module = ModuleManager.shared.module(id: "keepawake") as! KeepAwakeModule
+            let passed = module.debugRunChecks()
+            print(passed ? "ALL PASSED" : "FAILED")
+            exit(passed ? 0 : 1)
+        }
+        if args.contains("--keepawake-agents") {
+            // Watches the real transcript folders for a few seconds, then prints what counts as work.
+            let monitor = AgentActivityMonitor(grace: 300) { _ in }
+            monitor.start()
+            RunLoop.main.run(until: Date().addingTimeInterval(6))
+            monitor.evaluate()
+            let tools = AgentActivityMonitor.agentsRunningTools(AgentActivityMonitor.defaultSources)
+            print("watched folders: \(monitor.debugWatchCount)")
+            print("running tools: \(tools.map(\.rawValue).sorted())")
+            print("working: \(monitor.working.map(\.rawValue).sorted())")
+            monitor.stop()
+            exit(0)
+        }
+        if let path = value(after: "--keepawake-snapshot") {
+            let module = ModuleManager.shared.module(id: "keepawake") as! KeepAwakeModule
+            module.start()
+            module.showSessionPanel()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                capture(window: module.debugPanel, to: path)
+                module.stop()
+                NSApp.terminate(nil)
+            }
+            return true
+        }
+        if let path = value(after: "--keepawake-menu-snapshot") {
+            let module = ModuleManager.shared.module(id: "keepawake") as! KeepAwakeModule
+            module.start()
+            if args.contains("--keepawake-active") { _ = module.beginSession(duration: 90 * 60) }
+            let window = module.debugMenuWindow()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                capture(window: window, to: path)
+                window.close()
+                module.stop()
+                NSApp.terminate(nil)
+            }
+            return true
+        }
         if args.contains("--dock-info") {
             let displays = Displays.active()
             for d in displays { print("display \(d.id) \(d.name) key=\(d.key) bounds=\(d.bounds)") }
@@ -139,7 +183,13 @@ enum Debug {
                 expect(monitor.debugVerifyPanelBehavior(), "App Monitor limits rankings to six, fits content, and toggles with its status button")
                 expect(monitor.debugVerifyPinning(), "App Monitor pin preserves panel; unpin dismisses and removes monitors")
             }
+            if let awake = m as? KeepAwakeModule {
+                expect(awake.debugRunChecks(), "Keep Awake lifecycle and kernel assertion checks")
+            }
             m.stop()
+            if let awake = m as? KeepAwakeModule {
+                expect(!awake.hasResources, "Keep Awake released assertions, timers, observers, panel and status item")
+            }
             if let monitor = m as? AppMonitorModule {
                 expect(!monitor.hasResources, "App Monitor released timer, sampler, panel and status item")
             }

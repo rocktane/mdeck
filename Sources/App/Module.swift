@@ -63,6 +63,7 @@ final class ModuleManager {
         AlttyModule(),
         DockLockModule(),
         AppMonitorModule(),
+        KeepAwakeModule(),
     ]
 
     private init() {}
