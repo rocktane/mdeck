@@ -11,6 +11,7 @@ or off; a module that is off does not run at all — no observer, no shortcut, n
 | **Dock Lock** | Keeps the Dock on one display — the MacBook’s screen by default — even with external screens connected. | Accessibility |
 | **Keep Awake** | Prevents idle system and/or display sleep, indefinitely, for a duration, until a chosen time, or automatically while Claude Code or Codex works. | none |
 | **Clean Links** | Removes trackers (utm_*, fbclid, affiliate tags…) from the links you copy, unwraps redirects and AMP, expands short links. | Accessibility only for the “Paste the original link” shortcut |
+| **Ping** | Pings an IP or host (1.1.1.1 by default) every few seconds and shows a dot in the menu bar, in the colour you choose, that turns red when it stops replying. | none |
 
 macOS 13+. Written in Swift/AppKit, built with `swiftc` alone: no Xcode project, no SwiftPM.
 
@@ -149,6 +150,22 @@ cleans right after Tinycast saved the copy, so the history keeps both the origin
 link. Copies Tinycast does not save (apps excluded in Tinycast) are then not cleaned either.
 Without Tinycast the clipboard is checked twice a second. Either way, a ⌘V within about half a
 second of the ⌘C can still paste the original.
+
+### Ping
+
+Enable the module to add a dot to the menu bar, normally just left of mdeck's icon (⌘-drag to
+move it). The dot takes the chosen colour (green by default; any preset or a colour from the
+wheel) while the host replies, turns red when it does not, and is faded until the first reply.
+Its menu shows the last result (latency, or the error and since when) and **Check Now**.
+
+The host is an IPv4/IPv6 address or a host name, 1.1.1.1 by default; a pasted URL is reduced to
+its host. The check runs every 1 s to 5 min (5 s by default), and the dot can wait for 2, 3 or 5
+failed pings in a row before turning red, to ignore a lost packet. Each check is one ICMP echo
+through the system's `/sbin/ping` (`ping6` for IPv6), with a timeout of 3 s or the interval if
+shorter; a new check is also run on wake. No privilege is needed.
+A ping proves the host answers ICMP echo, not that websites load: networks that block ping
+(some captive portals and corporate firewalls) show red while browsing works.
+See [ownership details](docs/modules.md#ping).
 
 ## Signing
 

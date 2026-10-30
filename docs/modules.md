@@ -121,6 +121,30 @@ Inspect `--snapshot-settings … --page keepawake`, `--keepawake-snapshot …` a
 menu-entry snapshot in light/dark appearances. Physical idle sleep, lid behavior and long sessions
 require manual hardware validation; automated checks do not force this Mac to sleep.
 
+## Ping
+
+ID: `ping`; preferences: `ping.host` (raw text, default `1.1.1.1`),
+`ping.interval` (seconds, 1–300, default 5), `ping.failuresBeforeAlert` (1, 2, 3
+or 5, default 1) and `ping.color` (`StoredColor`, default green); default disabled; no
+permission required. Construction and the settings view are inert.
+
+`start()` owns one NSStatusItem (the dot, with its own menu), one repeating timer (common run-loop
+modes) and one workspace wake observer. Checks run on a serial utility queue, at most one at a
+time: a tick while a ping is in flight is skipped. `PingProbe` runs `/sbin/ping -c 1 -n -q -t`
+(`/sbin/ping6` for IPv6 literals, which has no `-t`) with `--` before the host, and terminates
+the process at timeout + 0.5 s, so name resolution is bounded too. `PingTarget.normalize` reduces
+input to a host and rejects anything outside letters, digits and `.-_:%`, or starting with `-`.
+Results return on the main thread and are rejected by lifecycle generation. A host change bumps
+the generation, cancels the ping in flight and resets state; an interval change only restarts
+the timer; colour and threshold changes apply at once. State transitions call `noteChange()`;
+repeated results only redraw the dot and the open settings page.
+
+`stop()` invalidates the timer, removes the wake observer, cancels the probe (terminating any
+running ping) and drains the queue, then removes the status item. Restart resumes the probe.
+`--lifecycle-test` checks the parser, real pings to 127.0.0.1, ::1, TEST-NET-1 (192.0.2.1, no
+reply within the timeout) and an `.invalid` name, cancellation, online/offline transitions,
+the threshold, the invalid-host state, the chosen colour, stop during a ping and restart.
+
 ## App Monitor measurements
 
 CPU lists use differences in cumulative user + system CPU time between samples, normalized by
