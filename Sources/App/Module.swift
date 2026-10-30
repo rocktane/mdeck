@@ -65,6 +65,7 @@ final class ModuleManager {
         AppMonitorModule(),
         KeepAwakeModule(),
         CleanLinksModule(),
+        PingModule(),
     ]
 
     private init() {}

@@ -208,12 +208,18 @@ enum Debug {
             if let awake = m as? KeepAwakeModule {
                 expect(awake.debugRunChecks(), "Keep Awake lifecycle and kernel assertion checks")
             }
+            if let net = m as? PingModule {
+                expect(net.debugRunChecks(), "Ping probe, state and lifecycle checks")
+            }
             m.stop()
             if let awake = m as? KeepAwakeModule {
                 expect(!awake.hasResources, "Keep Awake released assertions, timers, observers, panel and status item")
             }
             if let monitor = m as? AppMonitorModule {
                 expect(!monitor.hasResources, "App Monitor released timer, sampler, panel and status item")
+            }
+            if let net = m as? PingModule {
+                expect(!net.hasResources, "Ping released its timer, wake observer, ping and status item")
             }
             m.stop()
             expect(!m.isRunning, "\(m.name) stopped after duplicate stop")
