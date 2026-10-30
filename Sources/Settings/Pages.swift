@@ -110,6 +110,7 @@ final class ModulePageView: NSView {
 final class GeneralPageView: NSView {
     private var launchAtLogin: ActionSwitch!
     private var theme: NSSegmentedControl!
+    private var menuBarIcon: ActionSwitch!
     private var moduleSwitches: [(Module, ActionSwitch)] = []
     private var permissionLabel: NSTextField!
     private var permissionRow: SettingsRow!
@@ -144,6 +145,10 @@ final class GeneralPageView: NSView {
             self?.sync()
         }
 
+        menuBarIcon = ActionSwitch(isOn: AppPrefs.showMenuBarIcon) { on in
+            AppPrefs.showMenuBarIcon = on
+        }
+
         theme = NSSegmentedControl(labels: Theme.allCases.map(\.label), trackingMode: .selectOne,
                                    target: self, action: #selector(themeChanged(_:)))
 
@@ -151,6 +156,8 @@ final class GeneralPageView: NSView {
             header,
             SettingsRow.separator(),
             SettingsRow("Launch at login", launchAtLogin),
+            SettingsRow("Show in menu bar", menuBarIcon,
+                        help: "When hidden, open mdeck again from Finder or Spotlight to reach these settings."),
             SettingsRow("Appearance", theme,
                         help: "mdeck’s settings, menu and Altty’s switcher: follow the system, or stay light or dark."),
             SettingsRow.separator(),
@@ -223,6 +230,7 @@ final class GeneralPageView: NSView {
     @objc private func sync() {
         launchAtLogin.state = LaunchAtLogin.isEnabled ? .on : .off
         theme.selectedSegment = AppPrefs.theme.rawValue
+        menuBarIcon.state = AppPrefs.showMenuBarIcon ? .on : .off
         for (module, toggle) in moduleSwitches {
             toggle.state = ModuleManager.shared.isEnabled(module) ? .on : .off
         }
