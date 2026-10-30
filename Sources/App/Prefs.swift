@@ -54,6 +54,13 @@ enum AppPrefs {
     @Pref("app.launchAtLogin", default: false)
     static var launchAtLogin: Bool
 
+    /// Off hides the menu bar item; launching mdeck again (Finder, Spotlight, `open -a`)
+    /// still opens the settings.
+    @Pref("app.showMenuBarIcon", default: true)
+    static var showMenuBarIcon: Bool {
+        didSet { NotificationCenter.default.post(name: .menuBarIconVisibilityDidChange, object: nil) }
+    }
+
     /// Set once the settings window has been shown at first launch, so it only pops up
     /// unprompted that one time.
     @Pref("app.didOnboard", default: false)
@@ -62,4 +69,8 @@ enum AppPrefs {
     /// The sidebar page the settings window reopens on.
     @Pref("app.lastSettingsPage", default: "general")
     static var lastSettingsPage: String
+}
+
+extension Notification.Name {
+    static let menuBarIconVisibilityDidChange = Notification.Name("mdeck.menuBarIconVisibilityDidChange")
 }

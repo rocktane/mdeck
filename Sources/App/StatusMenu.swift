@@ -14,8 +14,15 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         item.menu = menu
         item.button?.setAccessibilityLabel("mdeck")
         refreshIcon()
+        refreshVisibility()
+        NotificationCenter.default.addObserver(self, selector: #selector(refreshVisibility),
+                                               name: .menuBarIconVisibilityDidChange, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(refreshIcon),
                                                name: .moduleStateDidChange, object: nil)
+    }
+
+    @objc private func refreshVisibility() {
+        item.isVisible = AppPrefs.showMenuBarIcon
     }
 
     /// Filled while at least one module runs, outlined when mdeck is doing nothing.
