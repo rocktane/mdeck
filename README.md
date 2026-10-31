@@ -157,6 +157,9 @@ Enable the module to add a dot to the menu bar, normally just left of mdeck's ic
 move it). The dot takes the chosen colour (green by default; any preset or a colour from the
 wheel) while the host replies, turns red when it does not, and is faded until the first reply.
 Its menu shows the last result (latency, or the error and since when) and **Check Now**.
+While the dot is shown, mdeck's other menu bar items (its icon, App Monitor's gauges, Keep Awake's
+cup without countdown) drop their left padding, so the dot sits 4 pt from its neighbour, the
+spacing macOS puts between any two items.
 
 The host is an IPv4/IPv6 address or a host name, 1.1.1.1 by default; a pasted URL is reduced to
 its host. The check runs every 1 s to 5 min (5 s by default), and the dot can wait for 2, 3 or 5
@@ -190,11 +193,12 @@ Debug build flags (`build/mdeck.app/Contents/MacOS/mdeck …`):
 |---|---|
 | `--snapshot-settings out.png [--page general\|nightshift\|altty\|docklock\|appmonitor\|cleanlinks\|keepawake] [--full-page]` | captures the settings window (no Screen Recording needed for our own windows); `--full-page` scrolls through the whole page, one `out-N.png` per screenful |
 | `--altty-snapshot out.png` / `--altty-demo` | the switcher panel |
-| `--appmonitor-test` / `--appmonitor-snapshot out.png` | checks real samples / captures the application rankings |
+| `--appmonitor-test` / `--appmonitor-snapshot out.png` | checks real samples / captures the application rankings (drawn off screen, on a plain background, while the screen is locked) |
 | `--keepawake-test` | checks real kernel assertions, rollback, deadlines, expiration and complete teardown; restores Keep Awake preferences |
 | `--keepawake-agents` | prints which agents are working right now, from the real transcripts and process tree |
 | `--keepawake-snapshot out.png` | captures the custom session panel |
 | `--keepawake-menu-snapshot out.png [--keepawake-active]` | captures a diagnostic window listing the native menu entries, optionally during a timed session (not a screenshot of the system menu) |
+| `--statusbar-gap [--no-icon]` | keeps mdeck's icon, App Monitor and Ping in the menu bar for 8 s and logs their button and image sizes, to measure the real gap from outside (Accessibility frames, a capture of the menu bar) |
 | `--lifecycle-test` | starts and stops every module, checks nothing is left behind; also runs Clean Links’ cleaning, pasteboard and watcher checks |
 | `--dock-info` | displays, Dock edge, where the Dock is |
 | `--clean-url <url>` | what Clean Links does with a link, short-link expansion included |

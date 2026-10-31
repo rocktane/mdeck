@@ -25,7 +25,8 @@ final class AppMonitorModule: NSObject, Module {
     private let queue = DispatchQueue(label: "mdeck.appmonitor", qos: .utility)
     private var generation = 0
     private var sampling = false
-    var hasResources: Bool { timer != nil || item != nil || panel != nil || sampler != nil || sampling }
+    private var spacingObserver: NSObjectProtocol?
+    var hasResources: Bool { timer != nil || item != nil || panel != nil || sampler != nil || sampling || spacingObserver != nil }
 
     func start() {
         guard !isRunning else { return }
@@ -36,6 +37,10 @@ final class AppMonitorModule: NSObject, Module {
         item?.button?.target = self
         item?.button?.action = #selector(togglePanel)
         item?.button?.sendAction(on: .leftMouseDown)
+        // The Ping dot starting or stopping changes the gauges' leading padding.
+        spacingObserver = NotificationCenter.default.addObserver(
+            forName: .moduleStateDidChange, object: nil, queue: .main
+        ) { [weak self] _ in self?.updateIcon() }
         updateIcon()
         collect()
         restartTimer()
@@ -56,6 +61,8 @@ final class AppMonitorModule: NSObject, Module {
         generation += 1
         timer?.invalidate(); timer = nil
         panel?.dispose(); panel = nil
+        if let spacingObserver { NotificationCenter.default.removeObserver(spacingObserver) }
+        spacingObserver = nil
         if let item { NSStatusBar.system.removeStatusItem(item) }
         item = nil
         // Drain the serial queue so disabling leaves no collection running.
@@ -102,7 +109,7 @@ final class AppMonitorModule: NSObject, Module {
             return true
         }
         image.isTemplate = true
-        item?.button?.image = image
+        StatusItemSpacing.setImage(image, of: item)
         item?.button?.toolTip = String(format: "App Monitor · CPU %.0f%% · Memory %.0f%%", snapshot.cpu * 100, snapshot.memory * 100)
         item?.button?.setAccessibilityLabel("App Monitor")
     }
@@ -115,6 +122,7 @@ final class AppMonitorModule: NSObject, Module {
         panel?.show(under: button)
     }
     var debugPanel: NSWindow? { panel }
+    var debugStatusItem: NSStatusItem? { item }
     func debugVerifyPanelBehavior() -> Bool {
         debugShowPanel()
         guard let button = item?.button, let panel else { return false }

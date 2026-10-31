@@ -19,8 +19,9 @@ private final class MonitorButton: NSButton {
 /// A stable row: hover changes visibility, never the row's layout or application target.
 private final class MonitorAppRow: NSView {
     let value = NSTextField(labelWithString: "")
+    let name = NSTextField(labelWithString: "")
+    let actions: NSStackView
     private let processes = NSTextField(labelWithString: "")
-    private let actions: NSStackView
     private var tracking: NSTrackingArea?
     private var hovered = false
     private var normalTextLimit: NSLayoutConstraint!
@@ -37,17 +38,19 @@ private final class MonitorAppRow: NSView {
         let icon = NSImageView()
         icon.image = app.icon
         icon.imageScaling = .scaleProportionallyUpOrDown
-        let name = NSTextField(labelWithString: app.name)
+        name.stringValue = app.name
         name.font = .systemFont(ofSize: 12, weight: .medium)
         name.lineBreakMode = .byTruncatingTail
         name.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         processes.font = .systemFont(ofSize: 10)
         processes.textColor = .secondaryLabelColor
+        processes.lineBreakMode = .byTruncatingTail
+        processes.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         let details = NSStackView(views: [name, processes])
         details.orientation = .vertical
         details.alignment = .leading
         details.spacing = 4
-        value.font = .monospacedDigitSystemFont(ofSize: 19, weight: .semibold)
+        value.font = .monospacedDigitSystemFont(ofSize: 17, weight: .semibold)
         value.alignment = .right
         value.setContentCompressionResistancePriority(.required, for: .horizontal)
         value.setContentHuggingPriority(.required, for: .horizontal)
@@ -64,25 +67,25 @@ private final class MonitorAppRow: NSView {
         }
         NSLayoutConstraint.activate([
             heightAnchor.constraint(equalToConstant: 64),
-            icon.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
+            icon.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
             icon.centerYAnchor.constraint(equalTo: centerYAnchor),
-            icon.widthAnchor.constraint(equalToConstant: 40),
-            icon.heightAnchor.constraint(equalToConstant: 40),
-            details.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 10),
+            icon.widthAnchor.constraint(equalToConstant: 36),
+            icon.heightAnchor.constraint(equalToConstant: 36),
+            details.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 8),
             details.centerYAnchor.constraint(equalTo: centerYAnchor),
 
-            value.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
+            value.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
             value.centerYAnchor.constraint(equalTo: centerYAnchor),
             // The actions sit immediately before the metric. Hidden controls retain their
             // geometry, so hovering does not shift the value or change the click target.
-            actions.trailingAnchor.constraint(equalTo: value.leadingAnchor, constant: -10),
+            actions.trailingAnchor.constraint(equalTo: value.leadingAnchor, constant: -8),
             actions.centerYAnchor.constraint(equalTo: centerYAnchor),
-            actions.widthAnchor.constraint(equalToConstant: 76),
+            actions.widthAnchor.constraint(equalToConstant: 68),
             quitButton.widthAnchor.constraint(equalTo: actions.widthAnchor),
             forceButton.widthAnchor.constraint(equalTo: actions.widthAnchor),
         ])
-        normalTextLimit = details.trailingAnchor.constraint(lessThanOrEqualTo: value.leadingAnchor, constant: -10)
-        hoverTextLimit = details.trailingAnchor.constraint(lessThanOrEqualTo: actions.leadingAnchor, constant: -10)
+        normalTextLimit = details.trailingAnchor.constraint(lessThanOrEqualTo: value.leadingAnchor, constant: -8)
+        hoverTextLimit = details.trailingAnchor.constraint(lessThanOrEqualTo: actions.leadingAnchor, constant: -8)
         normalTextLimit.isActive = true
         actions.isHidden = true
         update(app: app, metric: "")
@@ -106,7 +109,7 @@ private final class MonitorAppRow: NSView {
     }
     override func mouseEntered(with event: NSEvent) { setHovered(true) }
     override func mouseExited(with event: NSEvent) { setHovered(false) }
-    private func setHovered(_ value: Bool) {
+    func setHovered(_ value: Bool) {
         hovered = value
         actions.isHidden = !value
         normalTextLimit.isActive = !value
@@ -146,8 +149,12 @@ final class AppMonitorPanel: NSPanel {
     private var rows: [[MonitorAppRow]] = [[], []]
     private var latest = AppMonitorSnapshot()
 
+    /// Two 296 pt columns: room for an icon, a readable name and "12.50 GB", or on hover for the
+    /// quit buttons beside the value with the name truncated.
+    private static let width: CGFloat = 640
+
     init() {
-        super.init(contentRect: NSRect(x: 0, y: 0, width: 800, height: 590), styleMask: [.borderless], backing: .buffered, defer: false)
+        super.init(contentRect: NSRect(x: 0, y: 0, width: Self.width, height: 590), styleMask: [.borderless], backing: .buffered, defer: false)
         title = "App Monitor"
         isReleasedWhenClosed = false
         level = .floating
@@ -288,9 +295,27 @@ final class AppMonitorPanel: NSPanel {
         let shrunk = rows.allSatisfy { $0.count == 3 } && frame.height < sixHeight && frame.maxY == top
         update(AppMonitorSnapshot())
         let empty = rows.allSatisfy { $0.isEmpty } && frame.height < sixHeight
+        // Realistic maxima stay whole beside a long name, with and without the quit buttons.
+        let wide = MonitoredApp(url: URL(fileURLWithPath: "/tmp/MonitorFixtureWide.app"),
+                                name: "An Application With A Very Long Name", icon: NSImage(size: NSSize(width: 40, height: 40)),
+                                roots: [], cpu: 100, memory: 12_500 * 1_048_576, count: 12)
+        update(AppMonitorSnapshot(apps: [wide], ready: true))
+        var fits = frame.width == Self.width
+        for row in rows.joined() {
+            for hovered in [false, true] {
+                row.setHovered(hovered)
+                contentView?.layoutSubtreeIfNeeded()
+                let name = row.convert(row.name.bounds, from: row.name), value = row.value.frame, actions = row.actions.frame
+                fits = fits && row.frame.width == cpuList.frame.width && row.value.fittingSize.width <= value.width
+                    && value.maxX <= row.bounds.maxX
+                    && name.width < row.name.fittingSize.width && name.width >= (hovered ? 50 : 120)
+                    && (!hovered || (name.maxX <= actions.minX && actions.maxX <= value.minX))
+            }
+            row.setHovered(false)
+        }
         update(saved)
         if wasVisible { orderFrontRegardless() }
-        return capped && shrunk && empty
+        return capped && shrunk && empty && fits
     }
 
     func debugVerifyPinning() -> Bool {
