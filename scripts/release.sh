@@ -19,6 +19,35 @@ if git rev-parse "v$CURRENT" >/dev/null 2>&1; then
   CURRENT_RELEASED=true
 fi
 
+# Non-interactive mode: ./scripts/release.sh patch|minor|major|current
+# Requires a clean tree, releases from origin/main and pushes to main.
+AUTO="${1:-}"
+if [ -n "$AUTO" ]; then
+  [ -z "$(git status --porcelain)" ] || { echo "Error: working tree not clean"; exit 1; }
+  git fetch -q origin main --tags
+  [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ] || git merge-base --is-ancestor origin/main HEAD \
+    || { echo "Error: HEAD is behind or diverged from origin/main"; exit 1; }
+  case "$AUTO" in
+    current) [ "$CURRENT_RELEASED" = false ] || { echo "Error: v$CURRENT already released"; exit 1; }
+             NEW="$CURRENT" ;;
+    patch)   NEW="$MAJOR.$MINOR.$((PATCH + 1))" ;;
+    minor)   NEW="$MAJOR.$((MINOR + 1)).0" ;;
+    major)   NEW="$((MAJOR + 1)).0.0" ;;
+    *) echo "Usage: $0 [patch|minor|major|current]"; exit 1 ;;
+  esac
+  if git rev-parse "v$NEW" >/dev/null 2>&1; then echo "Error: tag v$NEW already exists"; exit 1; fi
+  if [ "$NEW" != "$CURRENT" ]; then
+    /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $NEW" "$PLIST"
+    /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $NEW" "$PLIST"
+    git commit -q -m "v$NEW" -- "$PLIST"
+  fi
+  git tag -a "v$NEW" -m "v$NEW"
+  git push -q origin HEAD:main
+  git push -q origin "v$NEW"
+  echo "v$NEW pushed to main — GitHub Actions will build the release and update Homebrew."
+  exit 0
+fi
+
 echo ""
 echo "  Current version: v$CURRENT"
 echo ""

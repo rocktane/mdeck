@@ -9,6 +9,7 @@ make cert      # one-time: self-signed "mdeck Signing" certificate
 make build     # native, signed → build/mdeck.app
 make debug     # + debug flags (--snapshot-settings, --lifecycle-test, --dock-info, …)
 make install   # copy to /Applications and launch
+make ship      # non-interactive: patch release (BUMP=minor|major) pushed to main, then make install
 ```
 
 `./build.sh` is the whole build: one `swiftc -O -wmo` over every `.swift` under `Sources/`
