@@ -13,6 +13,9 @@ enum SymbolicHotkey: Int32 {
 @_silgen_name("CGSSetSymbolicHotKeyEnabled") @discardableResult
 private func CGSSetSymbolicHotKeyEnabled(_ hotKey: Int32, _ isEnabled: Bool) -> CGError
 
+@_silgen_name("CGSIsSymbolicHotKeyEnabled")
+private func CGSIsSymbolicHotKeyEnabled(_ hotKey: Int32) -> Bool
+
 enum NativeSwitcher {
     private(set) static var isDisabledByUs = false
 
@@ -21,6 +24,18 @@ enum NativeSwitcher {
             CGSSetSymbolicHotKeyEnabled(key.rawValue, enabled)
         }
         isDisabledByUs = !enabled
+    }
+
+    /// The WindowServer can turn the native switcher back on behind our back — wake, unlock,
+    /// fast user switching, the Keyboard Shortcuts pane, another switcher or another mdeck
+    /// quitting. Re-applies what we want; only writes when the live state drifted.
+    @discardableResult
+    static func reassertIfNeeded() -> Bool {
+        guard isDisabledByUs else { return false }
+        let drifted = [SymbolicHotkey.commandTab, .commandShiftTab]
+            .contains { CGSIsSymbolicHotKeyEnabled($0.rawValue) }
+        if drifted { setEnabled(false) }
+        return drifted
     }
 
     /// Must run on quit, otherwise the user is left with no app switcher at all.

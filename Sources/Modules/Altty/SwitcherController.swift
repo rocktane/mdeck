@@ -25,6 +25,9 @@ final class SwitcherController {
     /// The switching chords, released as a set when they change or the module stops.
     private var chordHotkeys: [HotkeyManager.ID] = []
     private var observers: [NSObjectProtocol] = []
+    /// Keeps the native ⌘Tab off while we own it, see `NativeSwitcher.reassertIfNeeded()`.
+    private var nativeGuardObservers: [(NotificationCenter, NSObjectProtocol)] = []
+    private var nativeGuardTimer: Timer?
     private(set) var isRunning = false
 
     private init() {
@@ -62,6 +65,7 @@ final class SwitcherController {
         DockBadges.shared.start()
         registerHotkeys()
         refreshEventTap()
+        startNativeGuard()
     }
 
     /// Leaves nothing behind: no hotkey, no tap, no observer — and the native ⌘Tab back.
@@ -73,6 +77,7 @@ final class SwitcherController {
         observers = []
         HotkeyManager.shared.unregister(chordHotkeys)
         chordHotkeys = []
+        stopNativeGuard()
         NativeSwitcher.restoreIfNeeded()
         eventTap = nil
         MRUTracker.shared.stop()
@@ -102,6 +107,42 @@ final class SwitcherController {
         let takesCommandTab = AlttyPrefs.appShortcut.isCommandTab
             || (Self.canCycleWindows && AlttyPrefs.windowShortcut?.isCommandTab == true)
         NativeSwitcher.setEnabled(!takesCommandTab)
+    }
+
+    // MARK: - Native switcher guard
+
+    private func startNativeGuard() {
+        let ws = NSWorkspace.shared.notificationCenter
+        let reassert: (Notification) -> Void = { _ in NativeSwitcher.reassertIfNeeded() }
+        // After these the WindowServer may have reloaded its symbolic hotkeys, and Carbon
+        // hotkeys may be gone too: re-register (unless a ShortcutRecorder has them suspended).
+        let rearm: (Notification) -> Void = { [weak self] _ in
+            guard let self, self.isRunning else { return }
+            if !self.chordHotkeys.isEmpty { self.registerHotkeys() }
+            NativeSwitcher.reassertIfNeeded()
+        }
+        for name in [NSWorkspace.didWakeNotification, NSWorkspace.screensDidWakeNotification,
+                     NSWorkspace.sessionDidBecomeActiveNotification] {
+            nativeGuardObservers.append((ws, ws.addObserver(forName: name, object: nil, queue: .main, using: rearm)))
+        }
+        // If the native switcher stole a ⌘Tab, an app was just activated: fix it for the next one.
+        nativeGuardObservers.append((ws, ws.addObserver(forName: NSWorkspace.didActivateApplicationNotification,
+                                                        object: nil, queue: .main, using: reassert)))
+        let dnc = DistributedNotificationCenter.default()
+        nativeGuardObservers.append((dnc, dnc.addObserver(forName: .init("com.apple.screenIsUnlocked"),
+                                                          object: nil, queue: .main, using: rearm)))
+        // Safety net for what no notification reports (another app, System Settings).
+        let timer = Timer(timeInterval: 5, repeats: true) { _ in NativeSwitcher.reassertIfNeeded() }
+        timer.tolerance = 2
+        RunLoop.main.add(timer, forMode: .common)
+        nativeGuardTimer = timer
+    }
+
+    private func stopNativeGuard() {
+        nativeGuardObservers.forEach { $0.0.removeObserver($0.1) }
+        nativeGuardObservers = []
+        nativeGuardTimer?.invalidate()
+        nativeGuardTimer = nil
     }
 
     /// Forward chord plus, when the chord leaves Shift free, the Shift variant for backwards.
