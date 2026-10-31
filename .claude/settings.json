@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(make ship)",
+      "Bash(make ship BUMP=patch)",
+      "Bash(make ship BUMP=minor)",
+      "Bash(make ship BUMP=major)",
+      "Bash(make release BUMP=patch)",
+      "Bash(make release BUMP=minor)",
+      "Bash(make release BUMP=major)",
+      "Bash(make release BUMP=current)",
+      "Bash(make install)",
+      "Bash(make build)"
+    ]
+  }
+}

@@ -4,7 +4,7 @@ APP_BUNDLE = build/$(APP_NAME).app
 INSTALL_DIR = /Applications
 CODESIGN_ID ?= mdeck Signing
 
-.PHONY: all build debug cert icon install uninstall clean release
+.PHONY: all build debug cert icon install uninstall clean release ship
 
 all: build
 
@@ -43,5 +43,13 @@ clean:
 	@rm -rf build
 
 ## Tag a version; GitHub Actions publishes its archive and updates the Homebrew cask.
+## Interactive by default; `make release BUMP=patch|minor|major|current` asks nothing.
 release:
-	@./scripts/release.sh
+	$(if $(filter-out patch minor major current,$(BUMP)),$(error invalid BUMP '$(BUMP)'))
+	@./scripts/release.sh '$(BUMP)'
+
+## Non-interactive release + local install: `make ship` (patch) or `make ship BUMP=minor`.
+ship:
+	$(if $(filter-out patch minor major,$(or $(BUMP),patch)),$(error invalid BUMP '$(BUMP)'))
+	@./scripts/release.sh '$(or $(BUMP),patch)'
+	@$(MAKE) install
