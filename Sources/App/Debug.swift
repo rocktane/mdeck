@@ -11,6 +11,7 @@ import Cocoa
 ///   --altty-demo                               the switcher panel for 5 s
 ///   --dock-info                                displays, Dock edge and Dock display
 ///   --lifecycle-test                           start and stop every module, check nothing is left
+///   --statusbar-gap [--no-icon]                our status items for 8 s, to measure from outside
 ///   --clean-url <url>                          what Clean Links does with a link
 ///   --cleanlinks-hud <path>                    Clean Links' notice
 ///   --appearance dark|light
@@ -47,6 +48,10 @@ enum Debug {
         if args.contains("--menu-colors") {
             StatusMenu.debugColors()
             NSApp.terminate(nil)
+            return true
+        }
+        if args.contains("--statusbar-gap") {
+            statusBarGap(showIcon: !args.contains("--no-icon"))
             return true
         }
         if args.contains("--menu-size") {
@@ -170,6 +175,32 @@ enum Debug {
         return false
     }
 
+    /// `--statusbar-gap [--no-icon]`: Ping and App Monitor running beside mdeck's icon for 8 s,
+    /// logging what AppKit reports for each of our status items. Since macOS 26 the system hosts
+    /// status items, so their windows report no usable frame here: measure the real on-screen
+    /// gap from outside, with the Accessibility frames and a capture of the menu bar.
+    private static func statusBarGap(showIcon: Bool) {
+        if showIcon { (NSApp.delegate as? AppDelegate)?.statusMenu?.debugForceVisible() }
+        for id in ["appmonitor", "ping"] { ModuleManager.shared.module(id: id)?.start() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            for window in NSApp.windows where window.className.contains("StatusBarWindow") {
+                guard let button = window.contentView.flatMap({ find(NSStatusBarButton.self, in: $0) }) else { continue }
+                print("\(button.accessibilityLabel() ?? "?"): window \(NSStringFromRect(window.frame))"
+                      + " · button \(NSStringFromRect(button.frame))"
+                      + " · image \(button.image.map { NSStringFromSize($0.size) } ?? "-")")
+            }
+            fflush(stdout)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 8) {
+            for id in ["appmonitor", "ping"] { ModuleManager.shared.module(id: id)?.stop() }
+            NSApp.terminate(nil)
+        }
+    }
+
+    private static func find<T: NSView>(_ type: T.Type, in view: NSView) -> T? {
+        (view as? T) ?? view.subviews.lazy.compactMap { find(type, in: $0) }.first
+    }
+
     /// Runs each module for a moment without touching the saved on/off state.
     private static func lifecycleTest() {
         var failures = 0
@@ -204,6 +235,14 @@ enum Debug {
             if let monitor = m as? AppMonitorModule {
                 expect(monitor.debugVerifyPanelBehavior(), "App Monitor limits rankings to six, fits content, and toggles with its status button")
                 expect(monitor.debugVerifyPinning(), "App Monitor pin preserves panel; unpin dismisses and removes monitors")
+                let gauges = monitor.debugStatusItem
+                expect(gauges?.length == NSStatusItem.variableLength, "App Monitor gauges padded on both sides without Ping")
+                let ping = ModuleManager.shared.module(id: "ping")
+                ping?.start()
+                expect(gauges?.length == (gauges?.button?.image?.size.width ?? -1)
+                       && gauges?.button?.image?.isTemplate == true, "App Monitor gauges flush against the Ping dot")
+                ping?.stop()
+                expect(gauges?.length == NSStatusItem.variableLength, "App Monitor gauges padded again after Ping stops")
             }
             if let awake = m as? KeepAwakeModule {
                 expect(awake.debugRunChecks(), "Keep Awake lifecycle and kernel assertion checks")
@@ -244,6 +283,27 @@ enum Debug {
         exit(failures == 0 ? 0 : 1)
     }
 
+    /// While the screen is locked the WindowServer composites nothing and captures come out
+    /// empty: draw the view hierarchy instead, on a plain window background, since
+    /// behind-window materials only exist on screen.
+    private static func drawOffscreen(window: NSWindow, to path: String) {
+        guard let view = window.contentView,
+              let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
+        view.cacheDisplay(in: view.bounds, to: rep)
+        let image = NSImage(size: view.bounds.size, flipped: false) { rect in
+            view.effectiveAppearance.performAsCurrentDrawingAppearance {
+                NSColor.windowBackgroundColor.setFill()
+                NSBezierPath(roundedRect: rect, xRadius: 14, yRadius: 14).fill()
+            }
+            rep.draw(in: rect)
+            return true
+        }
+        guard let tiff = image.tiffRepresentation, let data = NSBitmapImageRep(data: tiff)?
+            .representation(using: .png, properties: [:]) else { return }
+        try? data.write(to: URL(fileURLWithPath: path))
+        print("wrote \(path) (drawn off screen: the screen is locked)")
+    }
+
     /// The whole scrollable page, one capture per screenful (`out-1.png`, `out-2.png`…),
     /// scrolling the real window so each part is drawn exactly as on screen.
     static func captureFullPage(of window: NSWindow?, to path: String) {
@@ -274,6 +334,9 @@ enum Debug {
 
     static func capture(window: NSWindow?, to path: String) {
         guard let window else { return }
+        if (CGSessionCopyCurrentDictionary() as? [String: Any])?["CGSSessionScreenIsLocked"] as? Bool == true {
+            return drawOffscreen(window: window, to: path)
+        }
         let wid = CGWindowID(window.windowNumber)
         guard let cg = CGWindowListCreateImage(.null, .optionIncludingWindow, wid,
                                                [.boundsIgnoreFraming, .bestResolution]),

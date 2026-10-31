@@ -31,12 +31,15 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         let image = NSImage(systemSymbolName: active ? "square.grid.2x2.fill" : "square.grid.2x2",
                             accessibilityDescription: "mdeck")
         image?.isTemplate = true
-        item.button?.image = image
+        StatusItemSpacing.setImage(image, of: item)
         let names = ModuleManager.shared.runningModules.map(\.name)
         item.button?.toolTip = names.isEmpty ? "mdeck — no module running" : "mdeck — " + names.joined(separator: ", ")
     }
 
     #if DEBUG
+    /// `--statusbar-gap`: shows the icon even when hidden in settings, to measure beside it.
+    func debugForceVisible() { item.isVisible = true }
+
     /// `--menu-size`: the menu's computed size, without opening it.
     func debugSize() -> NSSize {
         let menu = NSMenu()

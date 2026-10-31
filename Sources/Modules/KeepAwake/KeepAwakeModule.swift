@@ -13,6 +13,7 @@ final class KeepAwakeModule: NSObject, Module, NSMenuDelegate {
     private var item: NSStatusItem?
     private var timer: Timer?
     private var wakeObserver: NSObjectProtocol?
+    private var spacingObserver: NSObjectProtocol?
     private var generation = 0
     private var sessionPanel: KeepAwakeSessionPanel?
     private weak var settingsView: KeepAwakeSettingsView?
@@ -40,6 +41,10 @@ final class KeepAwakeModule: NSObject, Module, NSMenuDelegate {
             guard let self, self.isRunning, self.generation == current else { return }
             self.tick()
         }
+        // The Ping dot starting or stopping changes the cup's leading padding.
+        spacingObserver = NotificationCenter.default.addObserver(
+            forName: .moduleStateDidChange, object: nil, queue: .main
+        ) { [weak self] _ in self?.refreshUI() }
         if KeepAwakePrefs.startOnEnable { beginDefaultSession() }
         syncAgentMonitor()
         publishChange()
@@ -52,6 +57,8 @@ final class KeepAwakeModule: NSObject, Module, NSMenuDelegate {
         endSession(notify: false)
         if let wakeObserver { NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver) }
         wakeObserver = nil
+        if let spacingObserver { NotificationCenter.default.removeObserver(spacingObserver) }
+        spacingObserver = nil
         sessionPanel?.close()
         sessionPanel = nil
         menuStatus = nil
@@ -221,9 +228,10 @@ final class KeepAwakeModule: NSObject, Module, NSMenuDelegate {
         let image = NSImage(systemSymbolName: assertions.ids.isEmpty ? "cup.and.saucer" : "cup.and.saucer.fill",
                             accessibilityDescription: "Keep Awake")
         image?.isTemplate = true
-        item?.button?.image = image
-        item?.button?.title = KeepAwakePrefs.showCountdown && session?.remaining != nil
+        let title = KeepAwakePrefs.showCountdown && session?.remaining != nil
             ? " " + Self.countdown(session?.remaining ?? 0) : ""
+        item?.button?.title = title
+        StatusItemSpacing.setImage(image, of: item, flush: title.isEmpty)
         item?.button?.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
         item?.button?.toolTip = "Keep Awake — \(statusText ?? "")"
         item?.button?.setAccessibilityLabel("Keep Awake — \(statusText ?? "")")
@@ -331,7 +339,7 @@ final class KeepAwakeModule: NSObject, Module, NSMenuDelegate {
 
     #if DEBUG
     var hasResources: Bool {
-        !assertions.ids.isEmpty || timer != nil || wakeObserver != nil || item != nil || sessionPanel != nil
+        !assertions.ids.isEmpty || timer != nil || wakeObserver != nil || spacingObserver != nil || item != nil || sessionPanel != nil
             || agentMonitor != nil || isAgentHold
     }
     var debugAssertionIDs: [KeepAwakeAssertions.Kind: UInt32] { assertions.ids }

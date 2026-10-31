@@ -139,6 +139,13 @@ the generation, cancels the ping in flight and resets state; an interval change 
 the timer; colour and threshold changes apply at once. State transitions call `noteChange()`;
 repeated results only redraw the dot and the open settings page.
 
+The item is 14 pt wide with the 10 pt dot against its right edge. macOS leaves 4 pt between
+status items, which no app can change; a variable-length neighbour would add its own 4 pt of
+padding plus its image's inset. `StatusItemSpacing` therefore gives mdeck's image-only items
+(the mdeck icon, App Monitor's gauges, Keep Awake's cup without countdown) a fixed length with
+no leading padding while Ping runs; they re-apply it on `moduleStateDidChange`. A third-party
+neighbour, after a ⌘-drag, keeps its own padding.
+
 `stop()` invalidates the timer, removes the wake observer, cancels the probe (terminating any
 running ping) and drains the queue, then removes the status item. Restart resumes the probe.
 `--lifecycle-test` checks the parser, real pings to 127.0.0.1, ::1, TEST-NET-1 (192.0.2.1, no
@@ -162,7 +169,10 @@ management to handle helpers; detached subprocesses may survive. mdeck's own ter
 are disabled. Force Quit does not broadcast signals to unrelated or shared services.
 
 The refresh interval is configurable (1, 2, 5 or 10 seconds; default 2) and changes take effect
-while running. Each ranking shows at most six applications, and the panel height fits its rows.
+while running. Each ranking shows at most six applications, and the panel height fits its rows. The panel is
+640 pt wide (two 296 pt columns): names and process counts truncate, values never do, and the
+lifecycle test checks "100.0%" and "12.21 GB" beside a long name with and without the hovered
+quit buttons.
 The pinned panel stays above other windows across Spaces and remains visible when focus changes.
 The borderless panel closes on outside clicks unless pinned; clicking its menu
 bar item or pressing Escape closes it even while pinned. Row actions appear on hover.
