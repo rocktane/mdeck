@@ -58,3 +58,39 @@ Cmd+Tab.
 
 Runtime validation was on macOS 27.0.1; the macOS 13 fallback was compiled but not
 run on macOS 13.
+
+# Altty activation diagnosis — 2026-11-02
+
+## Symptom
+
+Sometimes the selected app (seen with T3 Code and Beeper) never came forward: the icon
+was in the switcher, releasing the shortcut did nothing. Arc was always the app being left.
+
+## Cause
+
+The WindowServer log showed mdeck's requests being refused:
+
+```text
+13e61b[SetFrontProcessWithInfo]: CPS: Rejecting expired request for pid 10149. Adjusted time of
+the request (885911589265750) is less than the time of the last user event sent (…)
+```
+
+The request time never changed across attempts, and matched the moment Arc had earlier put
+that same app in front (opening a link in it). `activate(from: source)` reuses the source's
+previous hand-off to the target, with its old timestamp, so the transfer is rejected as
+expired on every attempt. It is not specific to Electron: Ghostty and Finder fail the same
+way once the source has handed activation to them.
+
+## Correction
+
+`SwitcherController.activate(_:)` sends a plain `activate(options:)` and then the transfer.
+The plain request succeeds when mdeck is an accessory; while settings are open it is ignored
+but still lets the following transfer through (observed: transfer rejected → plain request →
+transfer accepted). Both target the same app, so nothing changes when both succeed.
+
+## Validation (macOS 27.0.1)
+
+`scripts/test-altty-handoff.swift` reproduces the hand-off. Before: 3/3 failures each for
+Beeper, Ghostty and Finder, with the log line above. After, with settings closed and open:
+all rounds pass for the three targets. `scripts/test-altty.swift` T3/Ghostty: 22/22 with
+settings closed, 23/23 with settings open. `--lifecycle-test`: ALL PASSED.
