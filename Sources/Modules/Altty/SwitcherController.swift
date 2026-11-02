@@ -281,18 +281,30 @@ final class SwitcherController {
         guard let target, !target.app.isTerminated else { return }
         switch target.target {
         case .app:
-            // Opening settings turns mdeck into a regular app. A background regular app's
-            // plain activation request can leave focus unchanged, even when it returns true.
-            // Explicitly transfer activation from the app the user is switching away from.
-            if #available(macOS 14.0, *), let source = NSWorkspace.shared.frontmostApplication {
-                target.app.activate(from: source, options: [.activateAllWindows])
-            } else {
-                target.app.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
-            }
+            activate(target.app)
         case .window(let window, let isMinimized):
             WindowDetection.raise(window, of: target.app, isMinimized: isMinimized)
         }
         // MRUTracker observes actual activations; a request that fails must not reorder it.
+    }
+
+    /// Each activation request alone can be refused silently: it returns true and nothing happens.
+    /// - Transferring activation from the app being left is needed while settings are open:
+    ///   mdeck is then a background regular app, and its plain request leaves focus unchanged.
+    /// - That transfer is rejected when the source earlier handed activation to the same target
+    ///   (a browser opening a link in that app): the request reuses the hand-off's timestamp and
+    ///   the WindowServer logs "CPS: Rejecting expired request" every time, until something else
+    ///   activates the target. A plain request sent first gets through, or, while settings are
+    ///   open and it is ignored itself, still lets the transfer behind it succeed.
+    /// Sending both covers every case (tested on macOS 27.0.1); they target the same app.
+    private func activate(_ app: NSRunningApplication) {
+        if #available(macOS 14.0, *), let source = NSWorkspace.shared.frontmostApplication,
+           source.processIdentifier != app.processIdentifier {
+            app.activate(options: [.activateAllWindows])
+            app.activate(from: source, options: [.activateAllWindows])
+        } else {
+            app.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+        }
     }
 
     private func cancel() {
