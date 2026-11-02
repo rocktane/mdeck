@@ -33,6 +33,42 @@ final class AdaptiveGlassView: NSGlassEffectView {
     }
 }
 
+/// Soft drop shadow drawn around the switcher in place of the window shadow. The WindowServer
+/// gives a dark-appearance window a crisp black rim around its shadow (a grey one in light mode),
+/// which the native switcher does not have. The shadow is masked out under the panel, so it
+/// never darkens the translucent glass.
+final class SwitcherShadowView: NSView {
+    private let mask = CAShapeLayer()
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        layer?.shadowColor = NSColor.black.cgColor
+        layer?.shadowOffset = CGSize(width: 0, height: -8)
+        layer?.shadowRadius = 22
+        mask.fillRule = .evenOdd
+        layer?.mask = mask
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    /// `rect` is the panel's frame in this view, `radius` its corner radius.
+    func update(panelRect rect: NSRect, radius: CGFloat) {
+        let shape = NSBezierPath(continuousRoundedRect: rect, cornerRadius: radius).cgPathCompat
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        layer?.shadowPath = shape
+        let cutout = CGMutablePath()
+        cutout.addRect(bounds)
+        cutout.addPath(shape)
+        mask.frame = bounds
+        mask.path = cutout
+        let dark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        layer?.shadowOpacity = dark ? 0.45 : 0.22
+        CATransaction.commit()
+    }
+}
+
 /// Non-activating borderless HUD panel. Non-activating matters: showing the switcher must not
 /// take focus away from the current app, otherwise the menu bar flickers and the "previous app"
 /// notion gets muddled.
@@ -41,6 +77,9 @@ final class AdaptiveGlassView: NSGlassEffectView {
 /// `.hudWindow` material with a hairline border. Both follow the light/dark appearance.
 final class SwitcherPanel: NSPanel {
     let switcherView = SwitcherView()
+    /// Room around the panel for `shadowView`, which the window has to contain.
+    private static let shadowMargin: CGFloat = 48
+    private let shadowView = SwitcherShadowView()
     /// The glass (macOS 26+) or the material — whichever holds `switcherView`.
     private var background: NSView!
     private var maskRadius: CGFloat = -1
@@ -54,7 +93,7 @@ final class SwitcherPanel: NSPanel {
         level = .popUpMenu
         isOpaque = false
         backgroundColor = .clear
-        hasShadow = true
+        hasShadow = false
         hidesOnDeactivate = false
         ignoresMouseEvents = false
         acceptsMouseMovedEvents = true
@@ -87,7 +126,10 @@ final class SwitcherPanel: NSPanel {
             effect.addSubview(switcherView)
             background = effect
         }
-        contentView = background
+        let container = NSView()
+        container.addSubview(shadowView)
+        container.addSubview(background)
+        contentView = container
     }
 
     /// Resizable squircle mask: one corner-sized tile stretched via cap insets, so a single image
@@ -137,6 +179,8 @@ final class SwitcherPanel: NSPanel {
         let origin = NSPoint(x: screen.frame.midX - size.width / 2,
                              y: screen.frame.midY - size.height / 2)
         applyCornerRadius(SwitcherView.Metrics(icon: iconSize).cornerRadius)
+        let margin = Self.shadowMargin
+        let panelRect = NSRect(x: margin, y: margin, width: size.width, height: size.height)
         // A theme change while the panel was hidden may not have reached the view, so the
         // layer-stored border colour is refreshed on every summon.
         (background as? AdaptiveEffectView)?.applyBorderColor()
@@ -144,7 +188,12 @@ final class SwitcherPanel: NSPanel {
             (background as? AdaptiveGlassView)?.applyTintColor()
         }
 
-        setFrame(NSRect(origin: origin, size: size), display: false)
+        setFrame(NSRect(x: origin.x - margin, y: origin.y - margin,
+                        width: size.width + margin * 2, height: size.height + margin * 2),
+                 display: false)
+        background.frame = panelRect
+        shadowView.frame = contentView?.bounds ?? .zero
+        shadowView.update(panelRect: panelRect, radius: maskRadius)
         switcherView.frame = NSRect(origin: .zero, size: size)
         switcherView.iconSize = iconSize
         switcherView.showsLabel = showsLabel
